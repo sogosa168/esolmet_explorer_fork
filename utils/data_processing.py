@@ -11,6 +11,7 @@ def load_esolmet_data():
     
     esolmet = pd.concat([importa_esolmet(archivo) for archivo in archivos])
     esolmet.sort_index(inplace=True)
-    esolmet.reset_index(inplace=True)
+    # esolmet.reset_index(inplace=True)
     esolmet.I_dir_Avg = esolmet.I_dir_Avg.astype(float)
+    print(esolmet.info())
     return esolmet
