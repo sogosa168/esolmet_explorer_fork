@@ -1,0 +1,7 @@
+shiny
+shinywidgets
+shinyswatch  
+pandas 
+plotly
+matplotlib
+
