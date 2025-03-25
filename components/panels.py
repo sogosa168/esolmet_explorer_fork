@@ -1,4 +1,4 @@
-from shiny import ui
+from shiny import ui, reactive, render
 
 
 def panel_explorador():
@@ -25,6 +25,26 @@ def panel_estadistica():
 def panel_herramientas():
     return ui.nav_panel("Herramientas", "Panel C content")
 
+def panel_pruebas():
+    return ui.nav_panel("Pruebas", "Pruebas de los datos")
+
 
 def panel_documentacion():
     return ui.nav_panel("Documentación", "Inserte aquí la documentacion")
+
+
+
+
+
+def panel_subir_datos():
+    return ui.nav_panel(
+        "Subir Datos", 
+        # 1) Input para seleccionar el archivo CSV
+        ui.input_file(
+            "archivo", 
+            "Selecciona el archivo CSV", 
+            accept='.csv'
+        ),
+        ui.output_plot('plot_matplotlib')  
+
+    )

@@ -18,7 +18,7 @@ app_ui = ui.page_fluid(
     theme=shinyswatch.theme.journal
   
 )
-
+ 
 
 def server(input, output, session):
 
