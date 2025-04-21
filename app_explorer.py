@@ -3,7 +3,7 @@ import shinyswatch
 from components.panels import panel_explorador, panel_herramientas, panel_estadistica, panel_documentacion
 from utils.data_processing import load_esolmet_data
 from utils.graficadores import graficado_Is_matplotlib
-
+#import plotly.express as px
 
 esolmet = load_esolmet_data()
 
