@@ -4,7 +4,7 @@ from components.panels import panel_explorador, panel_herramientas, panel_estadi
 from utils.data_processing import load_esolmet_data
 from utils.graficadores import graficado_Is_matplotlib
 
-#import plotly.express as px
+# import plotly.express as px
 # No voy a usar plotly de momento hasta no tener idea de los datos
 
 esolmet = load_esolmet_data()
