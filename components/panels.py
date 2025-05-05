@@ -6,7 +6,7 @@ def panel_documentacion():
         "Documentación",
         ui.h4("Descripción de la app"),
         ui.p(
-            "Esta aplicación web permite cargar, visualizar y procesar archivos CSV con datos en formato ESOLMET. "
+            "Esta aplicación web permite cargar, visualizar y procesar archivos CSV con datos de ESOLMET. "
             "Los usuarios pueden realizar las siguientes acciones:"
         ),
         ui.tags.ul(
