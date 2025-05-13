@@ -1,7 +1,7 @@
 from shiny import App, Inputs, Outputs, Session, render, ui, req, reactive
-import shinyswatch
 import faicons as fa  
-from components.panels import panel_subir_datos, panel_pruebas, panel_cargar_datos, panel_documentacion
+from components.panels import panel_subir_archivo, panel_cargar_datos
+from components.helper_text import info_modal
 from utils.data_processing import carga_csv, run_tests, exporta_database
 from utils.plots import graficado_matplotlib, graficado_nulos
 import pandas as pd
@@ -10,19 +10,34 @@ from data_testing import import_data
 
 
 app_ui = ui.page_fluid(
-    ui.navset_card_tab(
-        panel_documentacion(),  
-        panel_subir_datos(),
-        panel_pruebas(),
+    ui.page_navbar(
+        ui.nav_spacer(),
+        panel_subir_archivo(),
         panel_cargar_datos(),
-        id="tab",  
-    ),
-    theme=shinyswatch.theme.zephyr
-  
+        ui.nav_control(
+            ui.input_action_button(
+                id="info_icon",
+                label=None,
+                icon=fa.icon_svg("circle-info"),
+                class_=(
+                    "btn "
+                    "d-flex align-items-center "
+                    "border-0 p-3 "
+                    ),
+                title="Documentación"
+            )
+        ),
+        title="ESOLMET Explorer"
+    )
 )
 
 
 def server(input: Inputs, output: Outputs, session: Session):
+
+    @reactive.Effect
+    @reactive.event(input.info_icon)
+    def _():
+        info_modal()
 
     @reactive.Calc
     def df():
