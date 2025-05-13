@@ -2,11 +2,10 @@ from shiny import App, Inputs, Outputs, Session, render, ui, req, reactive
 import faicons as fa  
 from components.panels import panel_subir_archivo, panel_cargar_datos
 from components.helper_text import info_modal
-from utils.data_processing import carga_csv, run_tests, exporta_database
+from utils.data_processing import _load_csv, run_tests, exporta_database
 from utils.plots import graficado_matplotlib, graficado_nulos
 import pandas as pd
 import duckdb
-from data_testing import import_data
 
 
 app_ui = ui.page_fluid(
@@ -40,14 +39,23 @@ def server(input: Inputs, output: Outputs, session: Session):
         info_modal()
 
     @reactive.Calc
+    def loaded():
+        f = req(input.archivo())[0]["datapath"]
+        return _load_csv(f)
+
+    @reactive.Calc
     def df():
-        f = req(input.archivo())
-        return carga_csv(f[0]["datapath"])
+        df0 = loaded().copy()
+        df0["TIMESTAMP"] = pd.to_datetime(df0["TIMESTAMP"])
+        for col in df0.columns:
+            if col != "TIMESTAMP":
+                df0[col] = pd.to_numeric(df0[col], errors="coerce")
+        return df0
 
     @reactive.effect
     def update_columns():
         data = df()
-        cols = [c for c in data.columns if c != 'TIMESTAMP']
+        cols = [c for c in data.columns if c != "TIMESTAMP"]
         ui.update_selectize(
             "col_selector",
             choices=cols,
@@ -60,7 +68,11 @@ def server(input: Inputs, output: Outputs, session: Session):
         data = df()
         selected = input.col_selector() or []
         return graficado_matplotlib(data, columns=selected)
-    
+
+    @render.plot
+    def plot_missing():
+        return graficado_nulos(df())
+
     @reactive.Calc
     def tests_dict():
         f = req(input.archivo())[0]["datapath"]
@@ -71,47 +83,40 @@ def server(input: Inputs, output: Outputs, session: Session):
         tests = tests_dict()
         filas = []
         for prueba, ok in tests.items():
-            if ok:
-                icono = fa.icon_svg("circle-check").add_class("text-success")
-            else:
-                icono = fa.icon_svg("circle-exclamation").add_class("text-danger")
+            icon = "circle-check" if ok else "circle-exclamation"
+            color = "text-success" if ok else "text-danger"
+            icono = fa.icon_svg(icon).add_class(color)
             filas.append(
                 ui.tags.tr(
                     ui.tags.td(prueba, style="text-align:left;"),
-                    ui.tags.td(icono, style="text-align:center;")
+                    ui.tags.td(icono, style="text-align:center;"),
                 )
             )
-
         return ui.tags.table(
             ui.tags.thead(
                 ui.tags.tr(
                     ui.tags.th("Prueba", style="text-align:left;"),
-                    ui.tags.th("Estado", style="text-align:center;")
+                    ui.tags.th("Estado", style="text-align:center;"),
                 )
             ),
             ui.tags.tbody(*filas),
-            class_="table table-sm table-striped w-auto"
+            class_="table table-sm table-striped w-auto",
         )
-    
-    @render.plot
-    def plot_missing():
-        return graficado_nulos(df())
 
     @reactive.Calc
     def raw_df():
-        f = req(input.archivo())[0]["datapath"]
-        data, _ = import_data(f)
-        df_raw = data.reset_index().rename(columns={"index": "TIMESTAMP"})
-        return df_raw
+        df0 = loaded()
+        df0["TIMESTAMP"] = pd.to_datetime(df0["TIMESTAMP"])
+        return df0
 
     @render.data_frame
     def df_types():
-        df = raw_df()
+        df0 = raw_df()
         return pd.DataFrame({
-            "Columna": df.columns,
-            "Tipo":     df.dtypes.astype(str)
+            "Columna": df0.columns,
+            "Tipo":     df0.dtypes.astype(str),
         })
-
+    
     @reactive.Calc
     def df_to_load():
         path = req(input.archivo())[0]["datapath"]

@@ -3,95 +3,83 @@ import pandas as pd
 import data_testing as dt
 
 
-def carga_csv(filepath):
-    try:
-        with open(filepath, 'r', encoding='utf-8') as file:
-            first_row = file.readline()
-            if 'TIMESTAMP' in first_row:
-                esolmet = pd.read_csv(
-                    filepath,
-                    index_col=0,
-                    parse_dates=True,
-                    dayfirst=True,
-                    encoding='utf-8'
-                )
-            else:
-                esolmet = pd.read_csv(
-                    filepath,
-                    skiprows=[0, 2, 3],
-                    index_col=0,
-                    parse_dates=True,
-                    dayfirst=True,
-                    encoding='utf-8'
-                )
-    except UnicodeDecodeError:
-        with open(filepath, 'r', encoding='ANSI') as file:
-            first_row = file.readline()
-            if 'TIMESTAMP' in first_row:
-                esolmet = pd.read_csv(
-                    filepath,
-                    index_col=0,
-                    parse_dates=True,
-                    dayfirst=True,
-                    encoding='ANSI'
-                )
-            else:
-                esolmet = pd.read_csv(
-                    filepath,
-                    skiprows=[0, 2, 3],
-                    index_col=0,
-                    parse_dates=True,
-                    dayfirst=True,
-                    encoding='ANSI'
-                )
-    
-    esolmet.sort_index(inplace=True)
-    esolmet.reset_index(inplace=True)
-    esolmet.drop(columns=['RECORD'], inplace=True)
-    esolmet['TIMESTAMP'] = pd.to_datetime(esolmet['TIMESTAMP'])
-    for col in esolmet.columns:
+def _load_csv(filepath: str) -> pd.DataFrame:
+    use_utf8 = dt.detect_encoding(filepath)
+    encoding = 'utf-8' if use_utf8 else 'ANSI'
+
+    with open(filepath, 'r', encoding=encoding) as f:
+        header = f.readline()
+    skip = [] if 'TIMESTAMP' in header else [0, 2, 3]
+
+    df = pd.read_csv(
+        filepath,
+        skiprows=skip,
+        index_col=0,
+        parse_dates=True,
+        dayfirst=True,
+        encoding=encoding,
+    )
+    df.sort_index(inplace=True)
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'TIMESTAMP'}, inplace=True)
+    if 'RECORD' in df.columns:
+        df.drop(columns=['RECORD'], inplace=True)
+    return df
+
+
+def formatted_csv(filepath: str) -> pd.DataFrame:
+    df = _load_csv(filepath)
+
+    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'])
+    for col in df.columns:
         if col != 'TIMESTAMP':
-            esolmet[col] = pd.to_numeric(esolmet[col], errors='coerce')
-    return esolmet
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    return df
 
 
-def run_tests(filepath):
+def raw_csv(filepath: str) -> pd.DataFrame:
+    df = _load_csv(filepath)
+    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'])
+    return df
+
+
+def run_tests(filepath: str) -> dict:
     """
     Executes a set of tests on the file using raw and formatted data:
       - Extension .csv
       - Encoding utf-8
       - No null values (after formatting)
       - No duplicates (after formatting)
-      - Correct type: TIMESTAMP raw as datetime64[ns], others raw as float64
-    Returns a dictionary with the test name and a boolean.
+      - Correct dtypes: TIMESTAMP raw as datetime64[ns], others raw as float64
     """
     # Extensión y encoding
     ext = dt.detect_endswith(filepath)
-    _, enc = dt.import_data(filepath)
+    enc = dt.detect_encoding(filepath)
 
-    # DataFrame raw para tipo
-    raw_df, _ = dt.import_data(filepath)
-    raw_df = raw_df.reset_index().rename(columns={'index': 'TIMESTAMP'})
+    # DataFrame raw para dtype tests
+    raw_df = raw_csv(filepath)
 
     # DataFrame formateado para nans y duplicados
-    formatted_df = carga_csv(filepath)
+    formatted_df = formatted_csv(filepath)
 
-    # Tests nulos y duplicados en formatted
+    # Tests nulos y duplicados en formatted_df
     nans = dt.detect_nans(formatted_df)
-    dup = dt.detect_duplicates(formatted_df)
+    dup  = dt.detect_duplicates(formatted_df)
 
-    # Test de tipos sobre raw
+    # Test de tipos sobre raw_df
     expected = {col: 'float64' for col in raw_df.columns if col != 'TIMESTAMP'}
     expected['TIMESTAMP'] = 'datetime64[ns]'
-    types = dt.detect_dtype(expected, raw_df)
+    types_ok = dt.detect_dtype(expected, raw_df)
 
     return {
-        'Extensión .CSV': ext,
-        'Encoding UTF-8': enc,
+        'Extensión .CSV':    ext,
+        'Encoding UTF-8':    enc,
         'Sin valores nulos': nans,
-        'Sin duplicados': dup,
-        'Tipo correcto': types,
+        'Sin duplicados':    dup,
+        'Tipo correcto':     types_ok,
     }
+
 
 def exporta_database(filepath):
     """

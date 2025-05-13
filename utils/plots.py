@@ -1,5 +1,5 @@
-import pandas as pd
 import matplotlib.pyplot as plt
+import missingno as msno
 
 
 def graficado_matplotlib(esolmet, columns=None):
@@ -15,11 +15,30 @@ def graficado_matplotlib(esolmet, columns=None):
 
 def graficado_nulos(df):
     na_counts = df.isna().sum()
-    na_counts = na_counts[na_counts > 0]
+    cols_with_na = na_counts[na_counts > 0].index.tolist()
+    if not cols_with_na:
+        fig = plt.figure(figsize=(8, 4))
+        fig.suptitle("No missing values detected")
+        return fig
 
-    fig_width = max(14, 0.6 * len(na_counts))
-    fig, ax = plt.subplots(figsize=(fig_width, 8))
-    na_counts.plot(kind='bar', color='tomato', ax=ax)
-    ax.grid(axis='y', alpha=0.3)
-    plt.xticks(rotation=45, ha='right')
+    fig_width = max(14, 0.6 * len(cols_with_na))
+    fig_height = 8
+
+    ax = msno.bar(
+        df[cols_with_na],
+        figsize=(fig_width, fig_height),
+        fontsize=10,
+        sort="descending"
+    )
+    fig = ax.get_figure()
+
+    plt.setp(ax.get_xticklabels(), ha="right")
+    ax.grid(axis="y", alpha=0.3)
+
+    ax.set_ylabel("Proporción")
+
+    if len(fig.axes) > 1:
+        fig.axes[1].set_ylabel("Conteo")
+
     return fig
+

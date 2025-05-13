@@ -1,4 +1,4 @@
-from .main import (import_data, 
+from .main import (detect_encoding, 
                    detect_endswith, 
                    detect_nans,
                    detect_duplicates,  

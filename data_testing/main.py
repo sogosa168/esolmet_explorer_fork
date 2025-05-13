@@ -1,41 +1,25 @@
-from typing import Optional, Tuple, Dict
+from typing import Dict
 import pandas as pd
+import chardet
 import glob
 
-def import_data(f: str, encoding: str = "utf-8") -> Tuple[Optional[pd.DataFrame], bool]:
+def detect_encoding(f: str, sample_size: int = 100_000) -> bool:
     """
-    Imports data from a CSV file, skipping specific rows and parsing dates.
+    Detects whether a file is encoded in UTF-8.
     Args:
-        f (str): The file path to the CSV file.
-        encoding (str, optional): The encoding of the CSV file. Defaults to "utf-8".
+        f (str): The path to the file to analyze.
+        sample_size (int, optional): Maximum number of bytes to read for detection.
+            Defaults to 100_000.
     Returns:
-        Tuple[Optional[pd.DataFrame], bool]: A tuple containing the DataFrame with the imported data (or None if an error occurred) and a boolean indicating if the encoding was correct.
+        bool: True if the detected encoding is UTF-8 (or a UTF-8 compatible variant), False otherwise.
     """
-    try:
-        df = pd.read_csv(
-            f,
-            skiprows=[0,2,3],
-            index_col=0,
-            parse_dates=True,
-            dayfirst=True,
-            encoding=encoding
-        )
-        del df["RECORD"]
-        tag_encoding = True
-    
-    except UnicodeDecodeError:
-        df = pd.read_csv(
-            f,
-            skiprows=[0,2,3],
-            index_col=0,
-            parse_dates=True,
-            dayfirst=True,
-            encoding="ANSI"
-        )
-        del df["RECORD"]
-        tag_encoding = False
+    with open(f, 'rb') as file:
+        raw = file.read(sample_size)
 
-    return df, tag_encoding
+    result = chardet.detect(raw)
+    encoding = (result.get('encoding') or '').lower()
+
+    return 'utf-8' in encoding
 
 
 def detect_endswith(filepath):
