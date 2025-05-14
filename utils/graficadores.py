@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 
 def graficado_Is_matplotlib(esolmet, fechas):
     fig, ax = plt.subplots()
-    columnas = ["I_glo_Avg","I_dir_Avg","I_dif_Avg","I_uv_Avg"]
+    columnas = ["I_glo_Avg","I_dir_Avg"]
     ax.set_xlim(fechas[0], fechas[1])
     for columna in columnas:
         ax.plot(esolmet[columna],label=columna)

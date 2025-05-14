@@ -3,11 +3,11 @@ import pandas as pd
 
 
 def load_esolmet_data():
-    archivos = glob.glob('data/*2010*.csv')
+    archivos = glob.glob('data/*.csv')
     
     def importa_esolmet(archivo):
         # Usamos el parámetro archivo para leer cada CSV
-        return pd.read_csv(archivo, skiprows=[0,2,3],
+        return pd.read_csv(archivo,
                            index_col=0, parse_dates=True, dayfirst=True)
     
     esolmet = pd.concat([importa_esolmet(archivo) for archivo in archivos])
