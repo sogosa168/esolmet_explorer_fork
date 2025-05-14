@@ -1,6 +1,5 @@
-def main():
-    print("Hello from esolmet-explorer!")
-
-
-if __name__ == "__main__":
-    main()
+# %%
+from utils.config import load_settings
+# %%
+variables, latitude, longitude, gmt, name = load_settings()
+# %%

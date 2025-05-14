@@ -3,6 +3,10 @@ import shinyswatch
 from components.panels import panel_subir_datos, panel_documentacion, panel_pruebas
 from utils.data_processing import carga_csv
 from utils.graficadores import graficado_Todo_matplotlib
+from utils.config import load_settings
+
+
+variables, latitude, longitude, gmt, name = load_settings()
 
 
 
