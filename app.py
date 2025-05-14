@@ -1,10 +1,10 @@
 from shiny import App, Inputs, Outputs, Session, render, ui, req, reactive
+from shinywidgets import render_plotly
 import faicons as fa  
 from components.panels import panel_subir_archivo, panel_cargar_datos
 from components.helper_text import info_modal
-from utils.data_processing import _load_csv, run_tests, exporta_database
-from utils.plots import graficado_matplotlib, graficado_nulos
-import pandas as pd
+from utils.data_processing import load_csv, run_tests, export_data
+from utils.plots import graficado_plotly, graficado_nulos
 import duckdb
 
 
@@ -22,7 +22,7 @@ app_ui = ui.page_fluid(
                     "btn "
                     "d-flex align-items-center "
                     "border-0 p-3 "
-                    ),
+                ),
                 title="Documentación"
             )
         ),
@@ -40,43 +40,27 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @reactive.Calc
     def loaded():
-        f = req(input.archivo())[0]["datapath"]
-        return _load_csv(f)
+        path = req(input.archivo())[0]["datapath"]
+        return load_csv(path, formatted=True)
 
     @reactive.Calc
-    def df():
-        df0 = loaded().copy()
-        df0["TIMESTAMP"] = pd.to_datetime(df0["TIMESTAMP"])
-        for col in df0.columns:
-            if col != "TIMESTAMP":
-                df0[col] = pd.to_numeric(df0[col], errors="coerce")
-        return df0
+    def raw_df():
+        path = req(input.archivo())[0]["datapath"]
+        return load_csv(path, formatted=False)
 
-    @reactive.effect
-    def update_columns():
-        data = df()
-        cols = [c for c in data.columns if c != "TIMESTAMP"]
-        ui.update_selectize(
-            "col_selector",
-            choices=cols,
-            selected=cols,
-            server=False,
-        )
-
-    @render.plot
-    def plot_matplotlib():
-        data = df()
-        selected = input.col_selector() or []
-        return graficado_matplotlib(data, columns=selected)
+    @render_plotly
+    def plot_plotly():
+        data = loaded()
+        return graficado_plotly(data)
 
     @render.plot
     def plot_missing():
-        return graficado_nulos(df())
+        return graficado_nulos(loaded())
 
     @reactive.Calc
     def tests_dict():
-        f = req(input.archivo())[0]["datapath"]
-        return run_tests(f)
+        path = req(input.archivo())[0]["datapath"]
+        return run_tests(path)
 
     @render.ui
     def table_tests():
@@ -103,29 +87,19 @@ def server(input: Inputs, output: Outputs, session: Session):
             class_="table table-sm table-striped w-auto",
         )
 
-    @reactive.Calc
-    def raw_df():
-        df0 = loaded()
-        df0["TIMESTAMP"] = pd.to_datetime(df0["TIMESTAMP"])
-        return df0
-
     @render.data_frame
     def df_types():
         df0 = raw_df()
-        return pd.DataFrame({
-            "Columna": df0.columns,
-            "Tipo":     df0.dtypes.astype(str),
-        })
-    
+        return df0.dtypes.rename_axis('Columna').reset_index(name='Tipo')
+
     @reactive.Calc
     def df_to_load():
         path = req(input.archivo())[0]["datapath"]
-        return exporta_database(path)
+        return export_data(path)
 
     @render.data_frame
     def df_loaded():
-        df_load = df_to_load()
-        return df_load
+        return df_to_load()
 
     @output
     @render.ui
@@ -148,7 +122,6 @@ def server(input: Inputs, output: Outputs, session: Session):
             """)
             con.execute("BEGIN TRANSACTION;")
 
-            # Insertamos por chunks:
             chunk_size = 5000
             for i in range(0, len(df_load), chunk_size):
                 chunk = df_load.iloc[i : i + chunk_size]

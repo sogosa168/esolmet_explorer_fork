@@ -1,4 +1,5 @@
 from shiny import ui
+from shinywidgets import output_widget
 import faicons as fa  
 
 
@@ -8,32 +9,24 @@ def panel_subir_archivo():
         # sección de carga y visualización de datos
         ui.layout_columns(
             ui.card(
-                ui.card_header("Importar datos"),
+                ui.card_header("Archivo"),
                 ui.input_file(
                     "archivo",
                     "Selecciona el archivo CSV",
                     accept='.csv'
                 ),
-                ui.input_selectize(
-                    "col_selector",
-                    "Selecciona las columnas",
-                    {},
-                    multiple=True,
-                ),
+                ui.output_table("table_tests"),
             ),
             ui.card(
                 ui.card_header("Gráfico"),
-                ui.output_plot("plot_matplotlib"),
+                output_widget("plot_plotly"),
+                full_screen=True,
             ),
-            col_widths=[4, 8],
+            col_widths=[3, 9],
         ),
 
         # Sección de pruebas de integridad de datos
         ui.layout_columns(
-            ui.card(
-                ui.card_header("Resultados"),
-                ui.output_table("table_tests"),
-            ),
             ui.card(
                 ui.card_header("Columnas y tipos"),
                 ui.output_data_frame("df_types"),
@@ -42,7 +35,7 @@ def panel_subir_archivo():
                 ui.card_header("Valores faltantes"),
                 ui.output_plot("plot_missing"),
             ),
-        col_widths=[3, 3, 6],
+        col_widths=[3, 9],
         ),
     )
 
