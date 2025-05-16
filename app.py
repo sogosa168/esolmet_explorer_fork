@@ -5,7 +5,12 @@ from components.panels import panel_subir_archivo, panel_cargar_datos
 from components.helper_text import info_modal
 from utils.data_processing import load_csv, run_tests, export_data
 from utils.plots import graficado_plotly, graficado_nulos
+from utils.config import load_settings
+import pandas as pd
 import duckdb
+
+
+variables, latitude, longitude, gmt, name = load_settings()
 
 
 app_ui = ui.page_fluid(
@@ -91,6 +96,30 @@ def server(input: Inputs, output: Outputs, session: Session):
     def df_types():
         df0 = raw_df()
         return df0.dtypes.rename_axis('Columna').reset_index(name='Tipo')
+
+    @render.data_frame
+    def df_nans():
+        df = loaded()
+        non_dt_cols = df.select_dtypes(exclude=["datetime64[ns]", "datetimetz"]).columns
+        mask = df[non_dt_cols].isna()
+        nans = mask.stack()[lambda s: s]
+        if nans.empty:
+            return pd.DataFrame({"Info": ["No se encontró ningún NaN en las columnas de datos."]})
+        loc = nans.reset_index()
+        loc.columns = ["Fila", "Columna", "is_nan"]
+        return loc[["Fila", "Columna"]]
+
+    @render.data_frame
+    def df_nats():
+        df = loaded()  
+        datetime_cols = df.select_dtypes(include=["datetime64[ns]", "datetimetz"]).columns
+        mask = df[datetime_cols].isna()
+        nats = mask.stack()[lambda s: s]
+        if nats.empty:
+            return pd.DataFrame({"Info": ["No se encontró ningún NaT en la estampa temporal."]})
+        loc = nats.reset_index()
+        loc.columns = ["Fila", "column", "is_nat"]
+        return loc[["Fila"]]
 
     @reactive.Calc
     def df_to_load():

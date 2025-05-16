@@ -55,6 +55,26 @@ def detect_nans(df : pd.DataFrame) -> bool:
     return tag_nans
 
 
+def detect_nats(df: pd.DataFrame) -> bool:
+    """
+    Checks whether a DataFrame contains any NaT (Not a Time) values in its datetime columns.
+    Parameters:
+        df (pd.DataFrame): The DataFrame to inspect.
+    Returns:
+        bool: True if no NaT values are found in any datetime columns;
+              False if at least one NaT is present.
+    """
+    # Select only datetime columns (including timezone-aware)
+    datetime_cols = df.select_dtypes(include=["datetime64[ns]", "datetimetz"]).columns
+
+    # Check each datetime column for NaT values
+    for col in datetime_cols:
+        if df[col].isna().any():
+            return False
+
+    return True
+
+
 def detect_duplicates(df: pd.DataFrame) -> bool:
     """
     Checks if a DataFrame contains duplicate rows based on its index.

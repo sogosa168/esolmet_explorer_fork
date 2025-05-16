@@ -63,17 +63,19 @@ def run_tests(filepath: str) -> dict:
       - extensión .csv
       - encoding utf-8
       - sin nulos ni duplicados (en df formateado)
+      - sin NaT en columnas datetime
       - tipos correctos: todas las columnas no-TIMESTAMP deben ser float64
     """
     ext_ok = dt.detect_endswith(filepath)
     enc_ok = dt.detect_encoding(filepath)
 
-    # dataframe formateado para pruebas de nulos y duplicados
+    # dataframe formateado para pruebas de nulos, duplicados y NaT
     fmt_df = load_csv(filepath, formatted=True, sort=True)
     nans_ok = dt.detect_nans(fmt_df)
     dup_ok = dt.detect_duplicates(fmt_df)
+    nats_ok = dt.detect_nats(fmt_df)  
 
-    # dataframe crudo para test de tipos, pero se espera float64 para todas las columnas salvo TIMESTAMP
+    # dataframe crudo para test de tipos, se espera float64 para todas las columnas salvo TIMESTAMP
     raw_df = load_csv(filepath, formatted=False, sort=False)
     expected_types = {'TIMESTAMP': 'datetime64[ns]'}
     for col in raw_df.columns:
@@ -84,7 +86,8 @@ def run_tests(filepath: str) -> dict:
     return {
         'Extensión .CSV': ext_ok,
         'Encoding UTF-8': enc_ok,
-        'Sin valores nulos': nans_ok,
+        'Sin valores NaN': nans_ok,
+        'Sin valores NaT': nats_ok,
         'Sin duplicados': dup_ok,
         'Tipo correcto': types_ok,
     }

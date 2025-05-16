@@ -37,6 +37,24 @@ def panel_subir_archivo():
             ),
         col_widths=[3, 9],
         ),
+        
+        ui.layout_columns(
+            ui.card(
+                ui.card_header("Ubicación de NaN"),
+                ui.output_data_frame("df_nans"),
+            ),
+            ui.card(
+                ui.card_header("Ubicación de NaT"),
+                ui.output_data_frame("df_nats"),
+            ),
+            ui.card(
+                ui.card_header("Otra prueba"),
+                
+            ),
+        col_widths=[3, 3, 6],
+        ),
+
+
     )
 
 
