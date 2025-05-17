@@ -4,7 +4,7 @@ import faicons as fa
 from components.panels import panel_subir_archivo, panel_cargar_datos
 from components.helper_text import info_modal
 from utils.data_processing import load_csv, run_tests, export_data
-from utils.plots import graficado_plotly, graficado_nulos
+from utils.plots import graficado_plotly, graficado_nulos, graficado_radiacion
 from utils.config import load_settings
 import pandas as pd
 import duckdb
@@ -58,10 +58,15 @@ def server(input: Inputs, output: Outputs, session: Session):
         data = loaded()
         return graficado_plotly(data)
 
+    @render_plotly
+    def plot_radiacion():
+        data = loaded()
+        return graficado_radiacion(data)
+
     @render.plot
     def plot_missing():
         return graficado_nulos(loaded())
-
+    
     @reactive.Calc
     def tests_dict():
         path = req(input.archivo())[0]["datapath"]

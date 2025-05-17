@@ -3,5 +3,6 @@ from .main import (detect_encoding,
                    detect_nans,
                    detect_nats,
                    detect_duplicates,  
-                   detect_dtype, 
+                   detect_dtype,
+                   detect_radiation, 
                    compare)

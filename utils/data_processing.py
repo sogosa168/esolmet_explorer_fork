@@ -62,34 +62,51 @@ def run_tests(filepath: str) -> dict:
     Ejecuta pruebas de:
       - extensión .csv
       - encoding utf-8
-      - sin nulos ni duplicados (en df formateado)
+      - sin NaN en columnas
       - sin NaT en columnas datetime
+      - sin duplicados
       - tipos correctos: todas las columnas no-TIMESTAMP deben ser float64
+      - sin valores positivos de radiación si la altura solar es negativa 
     """
+    # 1. extensión y encoding
     ext_ok = dt.detect_endswith(filepath)
     enc_ok = dt.detect_encoding(filepath)
 
-    # dataframe formateado para pruebas de nulos, duplicados y NaT
+    # 2. carga formateada para tests de NaN, NaT y duplicados
     fmt_df = load_csv(filepath, formatted=True, sort=True)
-    nans_ok = dt.detect_nans(fmt_df)
-    dup_ok = dt.detect_duplicates(fmt_df)
-    nats_ok = dt.detect_nats(fmt_df)  
 
-    # dataframe crudo para test de tipos, se espera float64 para todas las columnas salvo TIMESTAMP
+    nans_ok = dt.detect_nans(fmt_df)
+    dup_ok  = dt.detect_duplicates(fmt_df)
+    nats_ok = dt.detect_nats(fmt_df)
+
+    # 3. prueba de radiación: creamos un DataFrame separado
+    rad_df = fmt_df.copy()
+    # asegurarnos de DatetimeIndex en rad_df
+    if not isinstance(rad_df.index, pd.DatetimeIndex):
+        rad_df['TIMESTAMP'] = pd.to_datetime(
+            rad_df['TIMESTAMP'], errors='coerce'
+        )
+        rad_df = rad_df.set_index('TIMESTAMP')
+
+    rad_df = dt.detect_radiation(rad_df, config_path="configuration.ini")
+    rad_ok = rad_df["radiation_ok"].all()
+
+    # 4. carga cruda para test de tipos
     raw_df = load_csv(filepath, formatted=False, sort=False)
-    expected_types = {'TIMESTAMP': 'datetime64[ns]'}
+    expected_types = {"TIMESTAMP": "datetime64[ns]"}
     for col in raw_df.columns:
-        if col != 'TIMESTAMP':
-            expected_types[col] = 'float64'
+        if col != "TIMESTAMP":
+            expected_types[col] = "float64"
     types_ok = dt.detect_dtype(expected_types, raw_df)
 
     return {
-        'Extensión .CSV': ext_ok,
-        'Encoding UTF-8': enc_ok,
-        'Sin valores NaN': nans_ok,
-        'Sin valores NaT': nats_ok,
-        'Sin duplicados': dup_ok,
-        'Tipo correcto': types_ok,
+        "Extensión .CSV":         ext_ok,
+        "Encoding UTF-8":         enc_ok,
+        "Sin valores NaN":        nans_ok,
+        "Sin valores NaT":        nats_ok,
+        "Sin duplicados":         dup_ok,
+        "Tipo correcto":          types_ok,
+        "Sin radiación nocturna": rad_ok,
     }
 
 

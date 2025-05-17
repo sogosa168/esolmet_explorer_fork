@@ -48,13 +48,11 @@ def panel_subir_archivo():
                 ui.output_data_frame("df_nats"),
             ),
             ui.card(
-                ui.card_header("Otra prueba"),
-                
+                ui.card_header("Inconsistencias de radiación"),
+                output_widget("plot_radiacion"),
             ),
-        col_widths=[3, 3, 6],
+        col_widths=[2, 2, 8],
         ),
-
-
     )
 
 
