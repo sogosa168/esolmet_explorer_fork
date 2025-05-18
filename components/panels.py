@@ -49,7 +49,7 @@ def panel_subir_archivo():
             ),
             ui.card(
                 ui.card_header("Inconsistencias de radiación"),
-                output_widget("plot_radiacion"),
+                ui.output_data_frame("df_radiacion"),
             ),
         col_widths=[2, 2, 8],
         ),

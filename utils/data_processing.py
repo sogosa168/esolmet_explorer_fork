@@ -134,3 +134,32 @@ def export_data(filepath: str) -> pd.DataFrame:
     long_df.drop_duplicates(subset=['fecha', 'variable'], inplace=True)
     long_df['valor'] = long_df['valor'].astype(float)
     return long_df
+
+def radiacion(df, rad_columns=None):
+    # 1. preparar índice datetime
+    df_copy = df.copy()
+    if 'TIMESTAMP' in df_copy.columns:
+        df_copy['TIMESTAMP'] = pd.to_datetime(df_copy['TIMESTAMP'], errors='coerce')
+        df_copy = df_copy.dropna(subset=['TIMESTAMP']).set_index('TIMESTAMP')
+
+    # 2. obtener solar_altitude y radiation_ok
+    rad_df = dt.detect_radiation(df_copy)
+
+    # 3. renombrar para usar español
+    rad_df = rad_df.rename(columns={'solar_altitude': 'altura_solar'})
+
+    # 4. columnas de radiación
+    cols = rad_columns or ['I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg']
+    cols = [c for c in cols if c in rad_df.columns]
+    if not cols:
+        raise KeyError("No hay columnas de radiación para filtrar.")
+
+    # 5. filtrar registros nocturnos con radiación > 0
+    mask_noche = rad_df['altura_solar'] <= 0
+    mask_rad   = rad_df[cols].gt(0).any(axis=1)
+    nocturna   = rad_df.loc[mask_noche & mask_rad, cols + ['altura_solar']]
+
+    # 6. redondear altura solar a 2 decimales
+    nocturna['altura_solar'] = nocturna['altura_solar'].round(2)
+
+    return nocturna
