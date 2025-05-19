@@ -3,7 +3,6 @@ import pandas as pd
 import chardet
 import glob
 import pvlib
-import pytz
 from utils.config import load_settings
 
 
@@ -137,7 +136,7 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
             - one or more of the radiation columns:
               'I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg'.
         config_path (str): Path to the configuration INI file
-            containing [settings] with latitude, longitude, and gmt offset.
+            containing [settings] with latitude, longitude, and tz name.
 
     Returns:
         pd.DataFrame: A copy of the original DataFrame with two additional columns:
@@ -145,44 +144,36 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
             - radiation_ok (bool): True if no positive radiation values occur
               when solar_altitude ≤ 0; False otherwise.
     """
-    # load settings
-    vars_list, lat, lon, gmt_offset, name = load_settings(config_path)
+    # cargar settings
+    vars_list, lat, lon, tz_name, name = load_settings(config_path)
 
-    # make a copy and validate the index
-    df = df.copy()
+    # checar índice
     if not isinstance(df.index, pd.DatetimeIndex):
-        raise TypeError(
-            f"detect_radiation expected a DatetimeIndex, "
-            f"but got {type(df.index).__name__}. "
-            f"Make sure you parse and set your TIMESTAMP column as index."
-        )
+        raise TypeError("índice debe ser DatetimeIndex sin tz")
     if df.index.tz is not None:
-        raise ValueError("Index must be naive (no tz), representing local time.")
+        raise ValueError("índice debe ser naive (sin tz)")
 
-    # localize to the GMT offset and convert to UTC
-    local_tz = pytz.FixedOffset(gmt_offset * 60)
-    df.index = df.index.tz_localize(local_tz)
-    df_utc = df.tz_convert(pytz.UTC)
+    # localizar el índice en la zona tz_name
+    df = df.tz_localize(tz_name)
 
-    # calculate solar position
-    solpos = pvlib.solarposition.get_solarposition(
-        time=df_utc.index,
-        latitude=lat,
-        longitude=lon,
-        method='nrel_numpy'
-    )
-    df['solar_altitude'] = solpos['apparent_elevation'].values
+    # crear objeto Location de pvlib
+    loc = pvlib.location.Location(latitude=lat,
+                                  longitude=lon,
+                                  tz=tz_name)
 
-    # find which radiation columns are present
-    rad_cols = [c for c in ['I_dir_Avg','I_glo_Avg','I_dif_Avg','I_uv_Avg']
-                if c in df.columns]
+    # obtener posición solar aparente
+    solpos = loc.get_solarposition(times=df.index, method="nrel_numpy")
+    df["solar_altitude"] = solpos["apparent_elevation"].values
+
+    # detectar columnas de radiación disponibles
+    rad_cols = [c for c in ['I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg'] if c in df.columns]
     if not rad_cols:
-        raise KeyError("No radiation columns found in the DataFrame.")
+        raise KeyError("no se encontraron columnas de radiación")
 
-    # flag positive radiation at night
+    # bandera de radiación positiva durante la noche
     has_rad = df[rad_cols].gt(0).any(axis=1)
-    night   = df['solar_altitude'] <= 0
-    df['radiation_ok'] = ~(night & has_rad)
+    night   = df["solar_altitude"] <= 0
+    df["radiation_ok"] = ~(night & has_rad)
 
     return df
 

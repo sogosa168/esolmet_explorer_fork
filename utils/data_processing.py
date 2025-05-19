@@ -102,7 +102,7 @@ def run_tests(filepath: str) -> dict:
         "Sin valores NaT":        nats_ok,
         "Sin duplicados":         dup_ok,
         "Tipo correcto":          types_ok,
-        "Sin radiación nocturna": rad_ok,
+        "Sin radiación en noche": rad_ok,
     }
 
 
