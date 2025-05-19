@@ -5,12 +5,8 @@ from components.panels import panel_subir_archivo, panel_cargar_datos
 from components.helper_text import info_modal
 from utils.data_processing import load_csv, run_tests, export_data, radiacion
 from utils.plots import graficado_plotly, graficado_nulos
-from utils.config import load_settings
 import pandas as pd
 import duckdb
-
-
-variables, latitude, longitude, gmt, name = load_settings()
 
 
 app_ui = ui.page_fluid(
