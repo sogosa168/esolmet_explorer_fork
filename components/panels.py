@@ -3,7 +3,6 @@ from shinywidgets import output_widget
 import faicons as fa  
 
 
-<<<<<<< HEAD
 def panel_estadistica():
     return ui.nav_panel(
         "Estadística",
@@ -40,10 +39,8 @@ def panel_documentacion():
         "Inserta aquí la documentación"
     )
 
-def panel_subir_datos():
-=======
+
 def panel_subir_archivo():
->>>>>>> pruebas
     return ui.nav_panel(
         "Subir archivo",
         # sección de carga y visualización de datos
@@ -64,10 +61,7 @@ def panel_subir_archivo():
             ),
             col_widths=[3, 9],
         ),
-<<<<<<< HEAD
         # ui.output_plot('plot_matplotlib')  
-=======
->>>>>>> pruebas
 
         # Sección de pruebas de integridad de datos
         ui.layout_columns(
