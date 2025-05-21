@@ -144,33 +144,31 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
             - radiation_ok (bool): True if no positive radiation values occur
               when solar_altitude ≤ 0; False otherwise.
     """
-    # cargar settings
-    vars_list, lat, lon, tz_name, name = load_settings(config_path)
+    vars_list, lat, lon, gmt, name = load_settings(config_path)
 
-    # checar índice
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise TypeError("índice debe ser DatetimeIndex sin tz")
-    if df.index.tz is not None:
-        raise ValueError("índice debe ser naive (sin tz)")
+    # 1) generar tz a partir de gmt
+    inv = -gmt
+    sign = "+" if inv >= 0 else "-"
+    tz = f"Etc/GMT{sign}{abs(inv)}"
 
-    # localizar el índice en la zona tz_name
-    df = df.tz_localize(tz_name)
+    # 2) localizar el índice
+    df = df.tz_localize(tz)
 
-    # crear objeto Location de pvlib
+    # 3) crear objeto Location correctamente
     loc = pvlib.location.Location(latitude=lat,
                                   longitude=lon,
-                                  tz=tz_name)
+                                  tz=tz)
 
-    # obtener posición solar aparente
+    # 4) calcular posición solar
     solpos = loc.get_solarposition(times=df.index, method="nrel_numpy")
     df["solar_altitude"] = solpos["apparent_elevation"].values
 
-    # detectar columnas de radiación disponibles
-    rad_cols = [c for c in ['I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg'] if c in df.columns]
+    # 5) detectar columnas de radiación
+    rad_cols = [c for c in vars_list if c in df.columns]
     if not rad_cols:
-        raise KeyError("no se encontraron columnas de radiación")
+        raise KeyError("No se encontraron columnas de radiación")
 
-    # bandera de radiación positiva durante la noche
+    # 6) marcar inconsistencias
     has_rad = df[rad_cols].gt(0).any(axis=1)
     night   = df["solar_altitude"] <= 0
     df["radiation_ok"] = ~(night & has_rad)
