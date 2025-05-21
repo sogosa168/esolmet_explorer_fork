@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import data_testing as dt
 from utils.config import load_settings
-
+import glob
 
 variables, latitude, longitude, gmt, name = load_settings()
 ALLOWED_VARS = variables
@@ -182,3 +182,19 @@ def radiacion(df, rad_columns=None):
     nocturna['altura_solar'] = nocturna['altura_solar'].round(2)
 
     return nocturna
+
+
+def load_esolmet_data():
+    archivos = glob.glob('data/2023*.csv')
+    
+    def importa_esolmet(archivo):
+        # Usamos el parámetro archivo para leer cada CSV
+        return pd.read_csv(archivo,
+                           index_col=0, parse_dates=True, dayfirst=True)
+    
+    esolmet = pd.concat([importa_esolmet(archivo) for archivo in archivos])
+    esolmet.sort_index(inplace=True)
+    # esolmet.reset_index(inplace=True)
+    esolmet.I_dir_Avg = esolmet.I_dir_Avg.astype(float)
+    print(esolmet.info())
+    return esolmet
