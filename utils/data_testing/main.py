@@ -1,28 +1,27 @@
 from typing import Dict
 import pandas as pd
-import chardet
 import glob
 import pvlib
 from utils.config import load_settings
 
 
-def detect_encoding(f: str, sample_size: int = 100_000) -> bool:
+def detect_encoding(filepath: str) -> bool:
     """
-    Detects whether a file is encoded in UTF-8.
+    Detects whether a file is encoded in UTF-8 by attempting to decode it.
+
     Args:
-        f (str): The path to the file to analyze.
-        sample_size (int, optional): Maximum number of bytes to read for detection.
-            Defaults to 100_000.
+        filepath (str): Path to the file to analyze.
+
     Returns:
-        bool: True if the detected encoding is UTF-8 (or a UTF-8 compatible variant), False otherwise.
+        bool: True if the sample can be decoded as UTF-8 (or UTF-8 compatible), False otherwise.
     """
-    with open(f, 'rb') as file:
-        raw = file.read(sample_size)
-
-    result = chardet.detect(raw)
-    encoding = (result.get('encoding') or '').lower()
-
-    return 'utf-8' in encoding
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            for _ in f:  # read line by line
+                pass
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def detect_endswith(filepath):
