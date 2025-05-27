@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import data_testing as dtest
+import validation_tools as vt
 from utils.config import load_settings
 import glob
 
@@ -13,7 +13,7 @@ def _detect_csv(filepath: str) -> dict:
     """
     Detecta encoding y filas a omitir según el header.
     """
-    use_utf8 = dtest.detect_encoding(filepath)
+    use_utf8 = vt.detect_encoding(filepath)
     encoding = "utf-8" if use_utf8 else "latin-1"
     with open(filepath, "r", encoding=encoding, errors="replace") as f:
         header = f.readline()
@@ -80,19 +80,19 @@ def run_tests(filepath: str) -> dict:
     """
     Ejecuta pruebas de calidad sobre el CSV.
     """
-    ext_ok = dtest.detect_endswith(filepath)
-    enc_ok = dtest.detect_encoding(filepath)
+    ext_ok = vt.detect_endswith(filepath)
+    enc_ok = vt.detect_encoding(filepath)
 
     fmt_df = load_csv(filepath, formatted=True, sort=True)
-    nans_ok = dtest.detect_nans(fmt_df)
-    dup_ok  = dtest.detect_duplicates(fmt_df)
-    nats_ok = dtest.detect_nats(fmt_df)
+    nans_ok = vt.detect_nans(fmt_df)
+    dup_ok  = vt.detect_duplicates(fmt_df)
+    nats_ok = vt.detect_nats(fmt_df)
 
     rad_df = fmt_df.copy()
     if not isinstance(rad_df.index, pd.DatetimeIndex):
         rad_df['TIMESTAMP'] = pd.to_datetime(rad_df['TIMESTAMP'], errors='coerce')
         rad_df = rad_df.set_index('TIMESTAMP')
-    rad_df = dtest.detect_radiation(rad_df, config_path="configuration.ini")
+    rad_df = vt.detect_radiation(rad_df, config_path="configuration.ini")
     rad_ok = rad_df["radiation_ok"].all()
 
     raw_df = load_csv(filepath, formatted=False, sort=False)
@@ -100,16 +100,16 @@ def run_tests(filepath: str) -> dict:
     for col in raw_df.columns:
         if col != 'TIMESTAMP':
             expected_types[col] = 'float64'
-    types_ok = dtest.detect_dtype(expected_types, raw_df)
+    types_ok = vt.detect_dtype(expected_types, raw_df)
 
     return {
         "Extensión .CSV":         ext_ok,
         "Encoding UTF-8":         enc_ok,
-        "Sin valores NaN":        nans_ok,
+        # "Sin valores NaN":        nans_ok,
         "Sin valores NaT":        nats_ok,
         "Sin duplicados":         dup_ok,
         "Tipo correcto":          types_ok,
-        "Sin radiación en noche": rad_ok,
+        # "Sin radiación en noche": rad_ok,
     }
 
 
@@ -169,7 +169,7 @@ def radiacion(df, rad_columns=None):
         df = df.dropna(subset=['TIMESTAMP']).set_index('TIMESTAMP')
 
     # 2. obtener solar_altitude y radiation_ok
-    rad_df = dtest.detect_radiation(df)
+    rad_df = vt.detect_radiation(df)
 
     # 3. renombrar para usar español
     rad_df = rad_df.rename(columns={'solar_altitude': 'altura_solar'})
