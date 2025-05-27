@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import data_testing as dt
+import data_testing as dtest
 from utils.config import load_settings
 import glob
 
@@ -8,16 +8,17 @@ variables, latitude, longitude, gmt, name = load_settings()
 ALLOWED_VARS = variables
 MIN_YEAR = 2010
 
+
 def _detect_csv(filepath: str) -> dict:
     """
     Detecta encoding y filas a omitir según el header.
     """
-    use_utf8 = dt.detect_encoding(filepath)
-    encoding = 'utf-8' if use_utf8 else 'ANSI'
-    with open(filepath, 'r', encoding=encoding) as f:
+    use_utf8 = dtest.detect_encoding(filepath)
+    encoding = "utf-8" if use_utf8 else "latin-1"
+    with open(filepath, "r", encoding=encoding, errors="replace") as f:
         header = f.readline()
-    skiprows = [] if 'TIMESTAMP' in header else [0, 2, 3]
-    return {'encoding': encoding, 'skiprows': skiprows}
+    skiprows = [] if "TIMESTAMP" in header else [0, 2, 3]
+    return {"encoding": encoding, "skiprows": skiprows}
 
 
 def _read_raw(filepath: str) -> pd.DataFrame:
@@ -25,20 +26,26 @@ def _read_raw(filepath: str) -> pd.DataFrame:
     Lee el CSV sin formatear, manteniendo tipos iniciales.
     """
     params = _detect_csv(filepath)
+    common_kwargs = dict(
+        filepath_or_buffer=filepath,
+        skiprows=params["skiprows"],
+        parse_dates=[0],
+        dayfirst=True,
+        low_memory=False,
+    )
+
+    # 1) Intenta con el encoding detectado
     try:
-        df = pd.read_csv(
-            filepath,
-            skiprows=params['skiprows'],
-            parse_dates=[0],
-            dayfirst=True,
-            low_memory=False,
-            encoding=params['encoding']
-        )
-    except Exception as e:
-        raise ValueError(f"Error al leer CSV: {e}")
-    if df.columns[0] != 'TIMESTAMP':
-        df.rename(columns={df.columns[0]: 'TIMESTAMP'}, inplace=True)
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
+        df = pd.read_csv(**common_kwargs, encoding=params["encoding"])
+    except UnicodeDecodeError:
+        # 2) Si falla, reintenta con latin-1
+        df = pd.read_csv(**common_kwargs, encoding="latin-1")
+
+    # renombra columna de fecha y fuerza datetime
+    if df.columns[0] != "TIMESTAMP":
+        df.rename(columns={df.columns[0]: "TIMESTAMP"}, inplace=True)
+    df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], errors="coerce")
+
     return df
 
 
@@ -73,19 +80,19 @@ def run_tests(filepath: str) -> dict:
     """
     Ejecuta pruebas de calidad sobre el CSV.
     """
-    ext_ok = dt.detect_endswith(filepath)
-    enc_ok = dt.detect_encoding(filepath)
+    ext_ok = dtest.detect_endswith(filepath)
+    enc_ok = dtest.detect_encoding(filepath)
 
     fmt_df = load_csv(filepath, formatted=True, sort=True)
-    nans_ok = dt.detect_nans(fmt_df)
-    dup_ok  = dt.detect_duplicates(fmt_df)
-    nats_ok = dt.detect_nats(fmt_df)
+    nans_ok = dtest.detect_nans(fmt_df)
+    dup_ok  = dtest.detect_duplicates(fmt_df)
+    nats_ok = dtest.detect_nats(fmt_df)
 
     rad_df = fmt_df.copy()
     if not isinstance(rad_df.index, pd.DatetimeIndex):
         rad_df['TIMESTAMP'] = pd.to_datetime(rad_df['TIMESTAMP'], errors='coerce')
         rad_df = rad_df.set_index('TIMESTAMP')
-    rad_df = dt.detect_radiation(rad_df, config_path="configuration.ini")
+    rad_df = dtest.detect_radiation(rad_df, config_path="configuration.ini")
     rad_ok = rad_df["radiation_ok"].all()
 
     raw_df = load_csv(filepath, formatted=False, sort=False)
@@ -93,7 +100,7 @@ def run_tests(filepath: str) -> dict:
     for col in raw_df.columns:
         if col != 'TIMESTAMP':
             expected_types[col] = 'float64'
-    types_ok = dt.detect_dtype(expected_types, raw_df)
+    types_ok = dtest.detect_dtype(expected_types, raw_df)
 
     return {
         "Extensión .CSV":         ext_ok,
@@ -162,7 +169,7 @@ def radiacion(df, rad_columns=None):
         df = df.dropna(subset=['TIMESTAMP']).set_index('TIMESTAMP')
 
     # 2. obtener solar_altitude y radiation_ok
-    rad_df = dt.detect_radiation(df)
+    rad_df = dtest.detect_radiation(df)
 
     # 3. renombrar para usar español
     rad_df = rad_df.rename(columns={'solar_altitude': 'altura_solar'})
@@ -183,6 +190,49 @@ def radiacion(df, rad_columns=None):
 
     return nocturna
 
+def _df_nans(df: pd.DataFrame, filepath: str) -> pd.DataFrame:
+    # 1. Calcula offset según skiprows
+    csv_opts   = _detect_csv(filepath)
+    skip_count = len(csv_opts["skiprows"]) - 1
+    offset     = skip_count + 3  # +2 líneas de cabecera +1 para 1-based
+
+    # 2. Encuentra los NaN en columnas no datetime
+    non_dt = df.select_dtypes(exclude=["datetime64[ns]", "datetimetz"]).columns
+    mask   = df[non_dt].isna()
+    nans   = mask.stack()[lambda s: s]
+
+    # 3. Si no hay NaN, devuelve mensaje
+    if nans.empty:
+        return pd.DataFrame({"Info": ["No se encontró ningún NaN en las columnas de datos."]})
+
+    # 4. Reconstruye posiciones y aplica offset
+    loc = nans.reset_index()
+    loc.columns      = ["Fila_idx", "Columna", "is_nan"]
+    loc["fila_original"] = loc["Fila_idx"] + offset
+
+    # 5. Devuelve sólo fila y columna
+    return (
+        loc[["fila_original", "Columna"]]
+        .rename(columns={"fila_original": "Fila"})
+    )
+
+
+def _df_nats(df: pd.DataFrame) -> pd.DataFrame:
+    # 1. Encuentra NaT en columnas datetime
+    datetime_cols = df.select_dtypes(include=["datetime64[ns]", "datetimetz"]).columns
+    mask          = df[datetime_cols].isna()
+    nats          = mask.stack()[lambda s: s]
+
+    # 2. Si no hay NaT, devuelve mensaje
+    if nats.empty:
+        return pd.DataFrame({"Info": ["No se encontró ningún NaT en la estampa temporal."]})
+
+    # 3. Reconstruye posiciones
+    loc = nats.reset_index()
+    loc.columns = ["Fila", "Columna", "is_nat"]
+
+    # 4. Devuelve sólo la fila original
+    return loc[["Fila"]]
 
 def load_esolmet_data():
     archivos = glob.glob('data/2023*.csv')
