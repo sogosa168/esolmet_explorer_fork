@@ -1,5 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import missingno as msno
 from utils.config import load_settings
@@ -50,20 +52,21 @@ def graficado_nulos(df):
         fig.suptitle("Sin valores nulos")
         return fig
 
-    fig_width = max(14, 0.6 * len(cols_with_na))
-    fig_height = 8
-
-    ax = msno.bar(
+    fig, ax = plt.subplots(
+        figsize=(
+            max(14, 0.6 * len(cols_with_na)),
+            8
+        )
+    )
+    msno.bar(
         df[cols_with_na],
-        figsize=(fig_width, fig_height),
+        ax=ax,
         fontsize=10,
         sort="descending"
     )
-    fig = ax.get_figure()
 
     plt.setp(ax.get_xticklabels(), ha="right")
     ax.grid(axis="y", alpha=0.3)
-
     ax.set_ylabel("Proporción")
 
     if len(fig.axes) > 1:

@@ -7,7 +7,7 @@ import faicons as fa
 
 from utils.data_processing import load_csv, run_tests, export_data, radiacion, _df_nans, _df_nats
 from utils.plots import graficado_plotly, graficado_nulos
-from components.panels import panel_subir_archivo, panel_cargar_datos
+from components.panels import panel_subir_archivo, panel_pruebas_archivo, panel_cargar_datos
 from components.helper_text import info_modal
 
 
@@ -16,6 +16,7 @@ app_ui = ui.page_fluid(
     ui.page_navbar(
         ui.nav_spacer(),
         panel_subir_archivo(),
+        panel_pruebas_archivo(),
         panel_cargar_datos(),
         ui.nav_control(
             ui.input_action_button(
@@ -62,13 +63,13 @@ def server(input: Inputs, output: Outputs, session: Session):
         total_steps = 7
 
         with ui.Progress(min=0, max=total_steps) as p:
-            p.set(1, message="1/7 leyendo y formateando el CSV…")
+            p.set(1, message="1/7 leyendo y formateando el archivo…")
             df_fmt = load_csv(archivo, formatted=True)
             df_raw = load_csv(archivo, formatted=False)
             rv_loaded.set(df_fmt)
             rv_raw.set(df_raw)
 
-            p.set(2, message="2/7 ejecutando pruebas de calidad…")
+            p.set(2, message="2/7 ejecutando pruebas de integridad…")
             tests = run_tests(archivo)
             rv_tests.set(tests)
 
@@ -78,7 +79,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             p.set(4, message="4/7 analizando datos faltantes…")
             rv_missing.set(graficado_nulos(df_fmt))
 
-            p.set(5, message="5/7 calculando radiación…")
+            p.set(5, message="5/7 calculando radiación solar…")
             df_rad = radiacion(df_fmt)
             df_rad.index = df_rad.index.tz_localize(None)
             rv_rad.set(
@@ -170,11 +171,6 @@ def server(input: Inputs, output: Outputs, session: Session):
     @render.data_frame
     def df_types():
         return rv_types.get()
-    
-    @render.data_frame
-    def df_loaded():
-        archivo = req(input.archivo())
-        return export_data(archivo[0]["datapath"])
 
     @render.ui
     def table_tests():
@@ -201,4 +197,4 @@ def server(input: Inputs, output: Outputs, session: Session):
         )
 
 # instantiate app
-app = App(app_ui, server, debug=True)
+app = App(app_ui, server)
