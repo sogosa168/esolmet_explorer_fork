@@ -42,7 +42,7 @@ def panel_documentacion():
 
 def panel_subir_archivo():
     return ui.nav_panel(
-        "Subir archivo",
+        "Paso 1",
         ui.layout_columns(
             ui.card(
                 ui.card_header("Archivo"),
@@ -63,6 +63,12 @@ def panel_subir_archivo():
             ),
             col_widths=[3, 9],
         ),
+    )
+
+
+def panel_pruebas_archivo():
+    return ui.nav_panel(
+        "Paso 2",
         ui.layout_columns(
             ui.card(
                 ui.card_header("Columnas y tipos"),
@@ -94,7 +100,7 @@ def panel_subir_archivo():
 
 def panel_cargar_datos():
     return ui.nav_panel(
-        "Exportar datos",
+        "Paso 3",
         ui.card(
             ui.card_header(
                 ui.span("Datos preparados"),
@@ -117,6 +123,5 @@ def panel_cargar_datos():
             ),
             ui.output_ui("load_status"),
             ui.output_ui("delete_status"),
-            ui.output_data_frame("df_loaded"),
         ),
     )
