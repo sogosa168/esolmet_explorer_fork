@@ -5,8 +5,8 @@ from shiny import App, Inputs, Outputs, Session, render, ui, req, reactive
 from shinywidgets import render_plotly
 import faicons as fa
 
-from utils.data_processing import load_csv, run_tests, export_data, radiacion, _df_nans, _df_nats
-from utils.plots import graficado_plotly, graficado_nulos
+from utils.data_processing import load_csv, run_tests, export_data, radiacion
+from utils.plots import graficado_plotly, graficado_radiacion
 from components.panels import panel_subir_archivo, panel_pruebas_archivo, panel_cargar_datos
 from components.helper_text import info_modal
 
@@ -40,14 +40,14 @@ app_ui = ui.page_fluid(
 def server(input: Inputs, output: Outputs, session: Session):
     # shared reactive storage
     rv_loaded = reactive.Value(None)
-    rv_raw    = reactive.Value(None)
     rv_tests  = reactive.Value(None)
     rv_plotly = reactive.Value(None)
-    rv_missing = reactive.Value(None)
+    rv_rad_plot = reactive.Value(None)
+    # rv_missing = reactive.Value(None)
     rv_rad     = reactive.Value(None)
-    rv_nans    = reactive.Value(None)
-    rv_nats    = reactive.Value(None)
-    rv_types   = reactive.Value(None)
+    # rv_nans    = reactive.Value(None)
+    # rv_nats    = reactive.Value(None)
+    # rv_types   = reactive.Value(None)
 
     @reactive.Effect
     @reactive.event(input.info_icon)
@@ -60,26 +60,25 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.event(input.archivo)
     async def upload_status():
         archivo = req(input.archivo())[0]["datapath"]
-        total_steps = 7
+        total_steps = 4
 
         with ui.Progress(min=0, max=total_steps) as p:
-            p.set(1, message="1/7 leyendo y formateando el archivo…")
-            df_fmt = load_csv(archivo, formatted=True)
-            df_raw = load_csv(archivo, formatted=False)
+            p.set(1, message="1/4 leyendo y formateando el archivo…")
+            df_fmt = load_csv(archivo)
             rv_loaded.set(df_fmt)
-            rv_raw.set(df_raw)
 
-            p.set(2, message="2/7 ejecutando pruebas de integridad…")
-            tests = run_tests(archivo)
+            p.set(2, message="2/4 ejecutando pruebas de integridad…")
+            tests = run_tests(df_fmt, archivo)
             rv_tests.set(tests)
 
-            p.set(3, message="3/7 generando gráfico interactivo…")
-            rv_plotly.set(graficado_plotly(df_fmt))
+            p.set(3, message="3/4 generando gráficos interactivos…")
+            rv_plotly.set(graficado_plotly(archivo))
+            rv_rad_plot.set(graficado_radiacion(archivo))
 
-            p.set(4, message="4/7 analizando datos faltantes…")
-            rv_missing.set(graficado_nulos(df_fmt))
+            # p.set(4, message="4/5 analizando datos faltantes…")
+            # rv_missing.set(graficado_nulos(df_fmt))
 
-            p.set(5, message="5/7 calculando radiación solar…")
+            p.set(4, message="4/4 calculando radiación solar…")
             df_rad = radiacion(df_fmt)
             df_rad.index = df_rad.index.tz_localize(None)
             rv_rad.set(
@@ -88,16 +87,9 @@ def server(input: Inputs, output: Outputs, session: Session):
                     .rename(columns={"index": "TIMESTAMP"})
             )
 
-            p.set(6, message="6/7 localizando NaN y NaT…")
-            rv_nans.set(_df_nans(df_fmt, archivo))
-            rv_nats.set(_df_nats(df_fmt))
-
-            p.set(7, message="7/7 extrayendo tipos de columna…")
-            rv_types.set(
-                df_raw.dtypes
-                    .rename_axis("Columna")
-                    .reset_index(name="Tipo")
-            )
+            # p.set(6, message="6/7 localizando NaN y NaT…")
+            # rv_nans.set(_df_nans(df_fmt, archivo))
+            # rv_nats.set(_df_nats(df_fmt))
 
     # load into DuckDB
     @output
@@ -136,7 +128,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         if os.path.exists(db_path):
             try:
                 os.remove(db_path)
-                return ui.tags.div("Base de datos eliminada", class_="text-success")
+                return ui.tags.div("Base de datos eliminada", class_="text-danger")
             except PermissionError:
                 return ui.tags.div(
                     "No se puede eliminar: cierre las conexiones abiertas o reinicie la app.",
@@ -151,26 +143,26 @@ def server(input: Inputs, output: Outputs, session: Session):
     @render_plotly
     def plot_plotly():
         return rv_plotly.get()
+    
+    @render_plotly
+    def plot_radiacion():
+        return rv_rad_plot.get()
 
-    @render.plot
-    def plot_missing():
-        return rv_missing.get()
+    # @render.plot
+    # def plot_missing():
+    #     return rv_missing.get()
 
     @render.data_frame
     def df_radiacion():
         return rv_rad.get()
 
-    @render.data_frame
-    def df_nans():
-        return rv_nans.get()
+    # @render.data_frame
+    # def df_nans():
+    #     return rv_nans.get()
 
-    @render.data_frame
-    def df_nats():
-        return rv_nats.get()
-
-    @render.data_frame
-    def df_types():
-        return rv_types.get()
+    # @render.data_frame
+    # def df_nats():
+    #     return rv_nats.get()
 
     @render.ui
     def table_tests():
