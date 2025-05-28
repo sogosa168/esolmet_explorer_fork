@@ -71,30 +71,30 @@ def panel_pruebas_archivo():
         "Paso 2",
         ui.layout_columns(
             ui.card(
-                ui.card_header("Columnas y tipos"),
-                ui.output_data_frame("df_types"),
-            ),
-            ui.card(
-                ui.card_header("Valores faltantes"),
-                ui.output_plot("plot_missing"),
-            ),
-            col_widths=[3, 9],
-        ),
-        ui.layout_columns(
-            ui.card(
-                ui.card_header("Ubicación de NaN"),
-                ui.output_data_frame("df_nans"),
-            ),
-            ui.card(
-                ui.card_header("Ubicación de NaT"),
-                ui.output_data_frame("df_nats"),
-            ),
-            ui.card(
                 ui.card_header("Inconsistencias de radiación"),
                 ui.output_data_frame("df_radiacion"),
             ),
-            col_widths=[2, 2, 8],
+            ui.card(
+                ui.card_header("Gráfico de radiación"),
+                output_widget("plot_radiacion"),
+            ),
+            col_widths=[5, 7],
         ),
+        # ui.layout_columns(
+        #     ui.card(
+        #         ui.card_header("Valores faltantes"),
+        #         ui.output_plot("plot_missing"),
+        #     ),
+        #     ui.card(
+        #         ui.card_header("Ubicación de NaN"),
+        #         ui.output_data_frame("df_nans"),
+        #     ),
+        #     ui.card(
+        #         ui.card_header("Ubicación de NaT"),
+        #         ui.output_data_frame("df_nats"),
+        #     ),
+        #     col_widths=[6, 3, 3],
+        # ),
     )
 
 
@@ -102,26 +102,33 @@ def panel_cargar_datos():
     return ui.nav_panel(
         "Paso 3",
         ui.card(
-            ui.card_header(
-                ui.span("Datos preparados"),
-                ui.div(
-                    ui.input_action_button(
-                        "btn_load",
-                        "Cargar en base de datos",
-                        icon=fa.icon_svg("file-export"),
-                        class_="btn btn-outline-success ms-2"
+            ui.card_header("Datos preparados"),
+            ui.card_body(
+                ui.layout_column_wrap(
+                    ui.div(
+                        ui.p("Selecciona una acción para proceder."),
+                        ui.output_ui("load_status"),
+                        ui.output_ui("delete_status"),
+                        class_="flex-grow-1"
                     ),
-                    ui.input_action_button(
-                        "btn_delete",
-                        "Eliminar base de datos",
-                        icon=fa.icon_svg("trash"),
-                        class_="btn btn-outline-danger ms-2"
+                    ui.div(
+                        ui.input_action_button(
+                            "btn_load",
+                            "Cargar en base de datos",
+                            icon=fa.icon_svg("file-export"),
+                            class_="btn btn-outline-success w-100 mb-2"
+                        ),
+                        ui.input_action_button(
+                            "btn_delete",
+                            "Eliminar base de datos",
+                            icon=fa.icon_svg("trash"),
+                            class_="btn btn-outline-danger w-100"
+                        ),
+                        class_="d-flex flex-column align-items-end",
+                        style="min-width: 200px;"
                     ),
-                    class_="d-flex ms-auto"
-                ),
-                class_="d-flex align-items-center"
-            ),
-            ui.output_ui("load_status"),
-            ui.output_ui("delete_status"),
-        ),
+                    class_="d-flex gap-3 align-items-start"
+                )
+            )
+        )
     )
