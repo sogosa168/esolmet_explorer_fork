@@ -77,6 +77,7 @@ def panel_pruebas_archivo():
             ui.card(
                 ui.card_header("Gráfico de radiación"),
                 output_widget("plot_radiacion"),
+                full_screen=True,
             ),
             col_widths=[5, 7],
         ),
