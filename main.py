@@ -1,5 +1,18 @@
+# %% 
+import duckdb
+import pandas as pd
 # %%
-from utils.config import load_settings
+con = duckdb.connect('esolmet.db')
+
 # %%
-variables, latitude, longitude, gmt, name = load_settings()
+df = con.execute("SELECT * FROM lecturas").fetchdf()
+df
+# %%
+
+df_wide = df.pivot(index='fecha', columns='variable', values='valor')
+
+
+# Opcional: ordenar por fecha
+df_wide = df_wide.sort_index()
+df_wide
 # %%
