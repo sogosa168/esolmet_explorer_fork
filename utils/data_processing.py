@@ -1,10 +1,9 @@
-import numpy as np
 import pandas as pd
 import validation_tools as vt
 from utils.config import load_settings
 import glob
 
-variables, latitude, longitude, gmt, name = load_settings()
+variables, latitude, longitude, gmt, name, alias = load_settings()
 ALLOWED_VARS = variables
 MIN_YEAR = 2010
 
@@ -21,10 +20,19 @@ def _detect_csv(filepath: str) -> dict:
     return {"encoding": encoding, "skiprows": skiprows}
 
 
-def _read_raw(filepath: str) -> pd.DataFrame:
+def load_csv(filepath: str, sort: bool = True) -> pd.DataFrame:
     """
-    Lee el CSV sin formatear, manteniendo tipos iniciales.
+    Carga y limpia CSV en formato ancho:
+      - lee y parsea fechas
+      - filtra sólo variables permitidas
+      - convierte todas las columnas (excepto TIMESTAMP) a float
+      - elimina columnas 'RECORD' y 'Unnamed*'
+      - filtra TIMESTAMP ≥ MIN_YEAR
+      - elimina filas con NaN en TIMESTAMP o en datos
+      - elimina duplicados
+      - ordena por TIMESTAMP
     """
+    # 1. leer crudo
     params = _detect_csv(filepath)
     common_kwargs = dict(
         filepath_or_buffer=filepath,
@@ -32,126 +40,106 @@ def _read_raw(filepath: str) -> pd.DataFrame:
         parse_dates=[0],
         dayfirst=True,
         low_memory=False,
+        encoding=params["encoding"],
     )
-
-    # 1) Intenta con el encoding detectado
     try:
-        df = pd.read_csv(**common_kwargs, encoding=params["encoding"])
+        df = pd.read_csv(**common_kwargs)
     except UnicodeDecodeError:
-        # 2) Si falla, reintenta con latin-1
-        df = pd.read_csv(**common_kwargs, encoding="latin-1")
+        common_kwargs["encoding"] = "latin-1"
+        df = pd.read_csv(**common_kwargs)
 
-    # renombra columna de fecha y fuerza datetime
-    if df.columns[0] != "TIMESTAMP":
-        df.rename(columns={df.columns[0]: "TIMESTAMP"}, inplace=True)
+    # 2. renombrar fecha y asegurar datetime
+    df.rename(columns={df.columns[0]: "TIMESTAMP"}, inplace=True)
     df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], errors="coerce")
 
+    # 3. eliminar columnas innecesarias
+    drop_cols = [c for c in df.columns if c.startswith("Unnamed")
+                 or c == "RECORD"
+                 or c not in (["TIMESTAMP"] + ALLOWED_VARS)]
+    if drop_cols:
+        df.drop(columns=drop_cols, inplace=True)
+
+    # 4. filtrar año mínimo
+    df = df[df["TIMESTAMP"].dt.year >= MIN_YEAR]
+
+    # 5. convertir datos a float y limpiar nulos/duplicados
+    for col in df.columns:
+        if col != "TIMESTAMP":
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df.dropna(subset=["TIMESTAMP"], inplace=True)
+    df.dropna(axis=0, how="any", subset=[c for c in df.columns if c!="TIMESTAMP"], inplace=True)
+    df.drop_duplicates(inplace=True)
+
+    # 6. ordenar
+    if sort:
+        df.sort_values("TIMESTAMP", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+
     return df
 
 
-def load_csv(filepath: str, formatted: bool = True, sort: bool = True) -> pd.DataFrame:
+def run_tests(df: pd.DataFrame, filepath: str) -> dict:
     """
-    Carga CSV y opcionalmente formatea:
-      - formatted=True: convierte columnas no-TIMESTAMP a float
-      - sort=True: ordena por TIMESTAMP
-      - elimina columna 'RECORD' si existe
-      - filtra solo columnas permitidas en configuración
+    Ejecuta pruebas de calidad sobre el DataFrame y usa filepath para la extensión y el encoding.
     """
-    df = _read_raw(filepath)
+    # 1) pruebas sobre el archivo 
+    ext = vt.detect_endswith(filepath)
+    enc = vt.detect_encoding(filepath)
 
-    if 'RECORD' in df.columns:
-        df.drop(columns=['RECORD'], inplace=True)
+    # 2) integridad de datos en el df
+    nans = vt.detect_nans(df)
+    nats = vt.detect_nats(df)
+    dups = vt.detect_duplicates(df)
 
-    # filtrar columnas extras y mantener el orden de configuración
-    keep = ['TIMESTAMP'] + [col for col in ALLOWED_VARS if col in df.columns]
-    df = df.loc[:, keep]
+    # 3) radiación nocturna
+    rad_df = df.set_index("TIMESTAMP", drop=True)
+    rad = vt.detect_radiation(rad_df, config_path="configuration.ini")["radiation_ok"].all()
 
-    if formatted:
-        for col in df.columns:
-            if col != 'TIMESTAMP':
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        if sort:
-            df.sort_values('TIMESTAMP', inplace=True)
-            df.reset_index(drop=True, inplace=True)
-    return df
-
-
-def run_tests(filepath: str) -> dict:
-    """
-    Ejecuta pruebas de calidad sobre el CSV.
-    """
-    ext_ok = vt.detect_endswith(filepath)
-    enc_ok = vt.detect_encoding(filepath)
-
-    fmt_df = load_csv(filepath, formatted=True, sort=True)
-    nans_ok = vt.detect_nans(fmt_df)
-    dup_ok  = vt.detect_duplicates(fmt_df)
-    nats_ok = vt.detect_nats(fmt_df)
-
-    rad_df = fmt_df.copy()
-    if not isinstance(rad_df.index, pd.DatetimeIndex):
-        rad_df['TIMESTAMP'] = pd.to_datetime(rad_df['TIMESTAMP'], errors='coerce')
-        rad_df = rad_df.set_index('TIMESTAMP')
-    rad_df = vt.detect_radiation(rad_df, config_path="configuration.ini")
-    rad_ok = rad_df["radiation_ok"].all()
-
-    raw_df = load_csv(filepath, formatted=False, sort=False)
-    expected_types = {'TIMESTAMP': 'datetime64[ns]'}
-    for col in raw_df.columns:
-        if col != 'TIMESTAMP':
-            expected_types[col] = 'float64'
-    types_ok = vt.detect_dtype(expected_types, raw_df)
+    # 4) tipos de columna
+    expected_types = {"TIMESTAMP": "datetime64[ns]"}
+    for col in df.columns:
+        if col != "TIMESTAMP":
+            expected_types[col] = "float64"
+    tipos = vt.detect_dtype(expected_types, df)
 
     return {
-        "Extensión .CSV":         ext_ok,
-        "Encoding UTF-8":         enc_ok,
-        # "Sin valores NaN":        nans_ok,
-        "Sin valores NaT":        nats_ok,
-        "Sin duplicados":         dup_ok,
-        "Tipo correcto":          types_ok,
-        # "Sin radiación en noche": rad_ok,
+        "Extensión .CSV":         ext,
+        "Encoding UTF-8":         enc,
+        "Sin valores NaN":        nans,
+        "Sin valores NaT":        nats,
+        "Sin valores duplicados":         dups,
+        "Columnas tipo float":          tipos,
+        # "Sin radiación en la noche": rad,
     }
 
 
 def export_data(filepath: str) -> pd.DataFrame:
     """
     Prepara DF en formato largo para carga en BD:
-      - elimina columnas 'RECORD' y 'Unnamed'
-      - filtra registros con TIMESTAMP año ≥ 2010
+      - usa load_csv para obtener DataFrame limpio en forma ancha
       - convierte TIMESTAMP a string 'YYYY-MM-DD HH:MM:SS'
       - melt a ['fecha','variable','valor']
-      - limpia nulls y duplicados
+      - elimina duplicados y garantiza tipo float en 'valor'
     """
-    df = load_csv(filepath, formatted=False, sort=False)
+    # 1. cargar y limpiar
+    df = load_csv(filepath, sort=False)
 
-    # eliminar columnas innecesarias
-    drop_cols = [c for c in df.columns if c.startswith('Unnamed') or c == 'RECORD']
-    if drop_cols:
-        df.drop(columns=drop_cols, inplace=True)
+    # 2. convertir la fecha a string
+    df['TIMESTAMP'] = df['TIMESTAMP'].dt.strftime('%Y-%m-%d %H:%M')
 
-    # asegurar que TIMESTAMP sea datetime
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
-    # filtrar año mínimo
-    df = df[df['TIMESTAMP'].dt.year >= MIN_YEAR]
-    
-    # formatear TIMESTAMP a string
-    df['TIMESTAMP'] = df['TIMESTAMP'].dt.strftime('%Y-%m-%d %H:%M:%S')
-
-    # melt a formato largo
+    # 3. transformar a formato largo
     long_df = df.melt(
         id_vars=['TIMESTAMP'],
         var_name='variable',
         value_name='valor'
     )
-    # renombrar columnas
     long_df.columns = ['fecha', 'variable', 'valor']
-    # limpiar nulos en fecha y valor
-    long_df.replace(['Na', 'nan', 'NaN', '-', ''], np.nan, inplace=True)
-    long_df.dropna(subset=['fecha', 'valor'], inplace=True)
-    # eliminar duplicados
+
+    # 4. limpiar duplicados y asegurar tipo float
     long_df.drop_duplicates(subset=['fecha', 'variable'], inplace=True)
-    # asegurar tipo float en valor
     long_df['valor'] = long_df['valor'].astype(float)
+
     return long_df
 
 
@@ -190,49 +178,49 @@ def radiacion(df, rad_columns=None):
 
     return nocturna
 
-def _df_nans(df: pd.DataFrame, filepath: str) -> pd.DataFrame:
-    # 1. Calcula offset según skiprows
-    csv_opts   = _detect_csv(filepath)
-    skip_count = len(csv_opts["skiprows"]) - 1
-    offset     = skip_count + 3  # +2 líneas de cabecera +1 para 1-based
+# def _df_nans(df: pd.DataFrame, filepath: str) -> pd.DataFrame:
+#     # 1. Calcula offset según skiprows
+#     csv_opts   = _detect_csv(filepath)
+#     skip_count = len(csv_opts["skiprows"]) - 1
+#     offset     = skip_count + 3  # +2 líneas de cabecera +1 para 1-based
 
-    # 2. Encuentra los NaN en columnas no datetime
-    non_dt = df.select_dtypes(exclude=["datetime64[ns]", "datetimetz"]).columns
-    mask   = df[non_dt].isna()
-    nans   = mask.stack()[lambda s: s]
+#     # 2. Encuentra los NaN en columnas no datetime
+#     non_dt = df.select_dtypes(exclude=["datetime64[ns]", "datetimetz"]).columns
+#     mask   = df[non_dt].isna()
+#     nans   = mask.stack()[lambda s: s]
 
-    # 3. Si no hay NaN, devuelve mensaje
-    if nans.empty:
-        return pd.DataFrame({"Info": ["No se encontró ningún NaN en las columnas de datos."]})
+#     # 3. Si no hay NaN, devuelve mensaje
+#     if nans.empty:
+#         return pd.DataFrame({"Info": ["No se encontró ningún NaN en las columnas de datos."]})
 
-    # 4. Reconstruye posiciones y aplica offset
-    loc = nans.reset_index()
-    loc.columns      = ["Fila_idx", "Columna", "is_nan"]
-    loc["fila_original"] = loc["Fila_idx"] + offset
+#     # 4. Reconstruye posiciones y aplica offset
+#     loc = nans.reset_index()
+#     loc.columns      = ["Fila_idx", "Columna", "is_nan"]
+#     loc["fila_original"] = loc["Fila_idx"] + offset
 
-    # 5. Devuelve sólo fila y columna
-    return (
-        loc[["fila_original", "Columna"]]
-        .rename(columns={"fila_original": "Fila"})
-    )
+#     # 5. Devuelve sólo fila y columna
+#     return (
+#         loc[["fila_original", "Columna"]]
+#         .rename(columns={"fila_original": "Fila"})
+#     )
 
 
-def _df_nats(df: pd.DataFrame) -> pd.DataFrame:
-    # 1. Encuentra NaT en columnas datetime
-    datetime_cols = df.select_dtypes(include=["datetime64[ns]", "datetimetz"]).columns
-    mask          = df[datetime_cols].isna()
-    nats          = mask.stack()[lambda s: s]
+# def _df_nats(df: pd.DataFrame) -> pd.DataFrame:
+#     # 1. Encuentra NaT en columnas datetime
+#     datetime_cols = df.select_dtypes(include=["datetime64[ns]", "datetimetz"]).columns
+#     mask          = df[datetime_cols].isna()
+#     nats          = mask.stack()[lambda s: s]
 
-    # 2. Si no hay NaT, devuelve mensaje
-    if nats.empty:
-        return pd.DataFrame({"Info": ["No se encontró ningún NaT en la estampa temporal."]})
+#     # 2. Si no hay NaT, devuelve mensaje
+#     if nats.empty:
+#         return pd.DataFrame({"Info": ["No se encontró ningún NaT en la estampa temporal."]})
 
-    # 3. Reconstruye posiciones
-    loc = nats.reset_index()
-    loc.columns = ["Fila", "Columna", "is_nat"]
+#     # 3. Reconstruye posiciones
+#     loc = nats.reset_index()
+#     loc.columns = ["Fila", "Columna", "is_nat"]
 
-    # 4. Devuelve sólo la fila original
-    return loc[["Fila"]]
+#     # 4. Devuelve sólo la fila original
+#     return loc[["Fila"]]
 
 def load_esolmet_data():
     archivos = glob.glob('data/2023*.csv')
