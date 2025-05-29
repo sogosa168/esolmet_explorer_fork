@@ -143,7 +143,7 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
             - radiation_ok (bool): True if no positive radiation values occur
               when solar_altitude ≤ 0; False otherwise.
     """
-    vars_list, lat, lon, gmt, name = load_settings(config_path)
+    vars_list, lat, lon, gmt, name, alias = load_settings(config_path)
 
     # 1) generar tz a partir de gmt
     inv = -gmt
