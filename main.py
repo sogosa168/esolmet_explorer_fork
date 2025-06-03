@@ -9,8 +9,8 @@ df = con.execute("SELECT * FROM lecturas").fetchdf()
 df
 # %%
 
-# df_wide = df.pivot(index='fecha', columns='variable', values='valor')
-
+df_wide = df.pivot(index='fecha', columns='variable', values='valor')
+df_wide.index
 
 # # Opcional: ordenar por fecha
 # df_wide = df_wide.sort_index()

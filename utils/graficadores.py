@@ -22,10 +22,6 @@ def graficado_Is_matplotlib(fechas, alias_dict=None):
     df = con.execute(query).fetchdf()
     df = df.pivot(index="fecha", columns="variable", values="valor")
 
-    # 3) Identificar columnas de irradiancia
-    columnas = df.columns
-    Is = [c for c in columnas if c.lower().startswith("i") or c.lower() == "dni"]
-
     # 3) Figure + GridSpec
     fig = plt.figure()
     # fig.set_constrained_layout(True)
@@ -39,34 +35,35 @@ def graficado_Is_matplotlib(fechas, alias_dict=None):
         figure=fig,
     )
 
-    ax_te = fig.add_subplot(gs[0, 0])
-    ax_hr = fig.add_subplot(gs[1, 0], sharex=ax_te)
-    ax_p = fig.add_subplot(gs[2, 0], sharex=ax_te)
-    ax_is = fig.add_subplot(gs[3, 0], sharex=ax_te)
+    ax_tdb = fig.add_subplot(gs[0, 0])
+    ax_rh = fig.add_subplot(gs[1, 0], sharex=ax_tdb)
+    ax_p = fig.add_subplot(gs[2, 0], sharex=ax_tdb)
+    ax_i = fig.add_subplot(gs[3, 0], sharex=ax_tdb)
     ax_wind = fig.add_subplot(gs[:, 1], projection="windrose")
 
 
     # Graficar temperatura
-    ax_te.plot(df.index, df.tdb, label="To", c="k", alpha=0.8)
-    ax_te.set_ylabel("Temperatura [°C]")
-    ax_te.legend(loc="upper left")
+    ax_tdb.plot(df.index, df.tdb, label="tdb", c="k", alpha=0.8)
+    ax_tdb.set_ylabel("Temperatura [°C]")
+    ax_tdb.legend(loc="upper left")
 
     # Graficar presión
-    ax_p.plot(df.p_atm, label="Atmospheric pressure", alpha=0.8)
+    ax_p.plot(df.p_atm, label="p_atm", alpha=0.8)
     ax_p.set_ylabel("Presión [Pa]")
     ax_p.legend(loc="upper left")
 
     # Graficar Is
-    for I in Is:
-        ax_is.plot(df.index, df[I], label=I)
-    ax_is.set_ylabel("Irradiancia [W/m2]")
-    ax_is.legend(loc="upper left")
+    ax_i.plot(df.index, df.ghi, label="ghi")
+    ax_i.plot(df.index, df.dni, label="dni")
+    ax_i.plot(df.index, df.dhi, label="dhi")
+    ax_i.set_ylabel("Irradiancia [W/m2]")
+    ax_i.legend(loc="upper left")
 
     # Graficar humedad relativa hr
-    ax_hr.plot(df.rh, label="HR")
-    ax_hr.set_ylim(0, 100)
-    ax_hr.set_ylabel("HR [%]")
-    ax_hr.legend()
+    ax_rh.plot(df.rh, label="rh")
+    ax_rh.set_ylim(0, 100)
+    ax_rh.set_ylabel("HR [%]")
+    ax_rh.legend()
 
     # 5) Rosa de vientos
     ax_wind.bar(df.wd, df.ws, normed=True, opening=0.8, edgecolor="white")
