@@ -7,9 +7,9 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
-
+venv/
+sam_wind.csv
 data/esolmet.db
 data/
-
+esolmet.db
 *.db

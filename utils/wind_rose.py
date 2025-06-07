@@ -553,7 +553,7 @@ def run_wind_simulation(  #ESTA SI
     esolmet_df,
     turbine_name: str,
     ini_path: str = "configuration.ini",
-    wind_turbine_file: str = "wind-turbines2.json",
+    wind_turbine_file: str = "wind-turbines.json",
     wind_inputs_file: str = "windpower-inputs.json",
     output_csv: str = "sam_wind.csv",
 ) -> dict:

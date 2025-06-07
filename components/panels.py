@@ -242,6 +242,7 @@ def panel_pruebas_archivo():
             ),
             col_widths=[5, 7],
         ),
+        
     )
 
 
