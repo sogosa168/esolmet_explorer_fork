@@ -1,0 +1,930 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import plotly.express as px
+from utils.data_processing import load_esolmet_data
+import plotly.graph_objects as go
+from utils.config import load_settings
+from pathlib import Path
+import PySAM.Windpower as wp
+import json
+import calendar                     
+
+variables, latitude, longitude, gmt, name, alias, \
+    site_id, data_tz, wind_speed_height, air_temperature_height, air_pressure_height = load_settings()
+
+def create_wind_rose_period_plotly(
+    df,
+    dir_col='WindDir',
+    start=None,
+    end=None,
+    bins=16,
+    title=None
+):
+    """
+    genera una rosa de vientos interactiva (Plotly).
+    """
+    df_period = df.copy()
+    if not isinstance(df_period.index, pd.DatetimeIndex):
+        df_period.index = pd.to_datetime(df_period.index)
+    if start is not None:
+        start = pd.to_datetime(start)
+    if end is not None:
+        end = pd.to_datetime(end)
+    if start is not None and end is not None:
+        df_period = df_period.loc[start:end]
+    if df_period.empty:
+        min_d = df.index.min().strftime('%Y-%m-%d')
+        max_d = df.index.max().strftime('%Y-%m-%d')
+        raise ValueError(
+            f"No hay datos en el rango seleccionado ({start.date()} a {end.date()}). "
+            f"Rango disponible: {min_d} a {max_d}."
+        )
+    if title is None and start is not None and end is not None:
+        title = f"Rosa de vientos ({start.date()} a {end.date()})"
+    return create_wind_rose_plotly(
+        df_period,
+        dir_col=dir_col,
+        bins=bins,
+        title=title
+    )
+
+def create_wind_rose_by_speed(
+    df,
+    dir_col='WindDir',
+    speed_col='WS_ms_Avg',
+    dir_bins=16,
+    speed_bins=None,
+    title='Rosa de vientos por velocidad'
+):
+    """
+    Genera una rosa de vientos interactiva (Plotly) apilada por categorías de velocidad.
+
+    Parámetros:
+    - df: DataFrame con índice datetime y columnas de dirección y velocidad.
+    - dir_col: nombre de la columna de dirección en grados.
+    - speed_col: nombre de la columna de velocidad.
+    - dir_bins: número de sectores de dirección.
+    - speed_bins: lista de límites para categorizar velocidad. Ej: [0, 2, 4, 6, 8, np.inf].
+    - title: título de la gráfica.
+    """
+    df2 = df.copy()
+    if not isinstance(df2.index, pd.DatetimeIndex):
+        df2.index = pd.to_datetime(df2.index)
+    if speed_bins is None:
+        max_speed = df2[speed_col].max()
+        upper = np.ceil(max_speed / 1.5) * 1.5
+        bins = np.arange(0, upper + 1e-6, 1.5)
+        speed_bins = list(bins)
+    speed_labels = []
+    for i in range(len(speed_bins)-1):
+        low, high = speed_bins[i], speed_bins[i+1]
+        if i < len(speed_bins)-2:
+            speed_labels.append(f"{low:.1f}–{high:.1f}")
+        else:
+            speed_labels.append(f">{low:.1f}")
+
+    df2 = df2[[dir_col, speed_col]].dropna()
+    
+    df2['Velocidad'] = pd.cut(df2[speed_col], bins=speed_bins, labels=speed_labels, right=False)
+    deg_bins = np.linspace(0, 360, dir_bins+1)
+    deg_labels = [(deg_bins[i] + deg_bins[i+1]) / 2 for i in range(dir_bins)]
+    df2['Direccion'] = pd.cut(df2[dir_col] % 360, bins=deg_bins, labels=deg_labels, right=False)
+    df_counts = df2.groupby(['Direccion', 'Velocidad']).size().reset_index(name='count')
+    total = df_counts['count'].sum()
+    df_counts['Frecuencia'] = df_counts['count'] / total * 100
+    fig = px.bar_polar(
+        df_counts,
+        r='Frecuencia',
+        theta='Direccion',
+        color='Velocidad',
+        title=title,
+        template=None,
+        category_orders={'Velocidad': speed_labels}
+    )
+    fig.update_traces(hovertemplate='Dirección: %{theta}°<br>Frecuencia: %{r:.1f}%')
+    fig.update_layout(
+        legend_title_text='Velocidad (m/s)'
+    )
+    return fig
+
+def create_wind_rose_by_speed_period( #ESTA SI 
+    df,
+    dir_col='WindDir',
+    speed_col='WS_ms_Avg',
+    start=None,
+    end=None,
+    dir_bins=16,
+    speed_bins=None,
+    title=None
+):
+    """
+    Filtra por rango de fechas y genera una rosa interactiva apilada por velocidad.
+    """
+    dfp = df.copy()
+    if not isinstance(dfp.index, pd.DatetimeIndex):
+        dfp.index = pd.to_datetime(dfp.index)
+    if start is not None:
+        start = pd.to_datetime(start)
+    if end is not None:
+        end = pd.to_datetime(end)
+    if start is not None and end is not None:
+        dfp = dfp.loc[start:end]
+    if dfp.empty:
+        min_d = df.index.min().strftime('%Y-%m-%d')
+        max_d = df.index.max().strftime('%Y-%m-%d')
+        raise ValueError(
+            f"No hay datos en el rango seleccionado ({start.date()} a {end.date()}). "
+            f"Rango disponible: {min_d} a {max_d}."
+        )
+    if title is None and start is not None and end is not None:
+        title = f"Rosa de vientos por velocidad ({start.date()} a {end.date()})"
+    return create_wind_rose_by_speed(
+        dfp,
+        dir_col=dir_col,
+        speed_col=speed_col,
+        dir_bins=dir_bins,
+        speed_bins=speed_bins,
+        title=title
+    )
+
+
+def create_wind_rose_plotly(df, dir_col='WindDir', bins=16, title='Rosa de vientos'):
+    """
+    Genera una rosa de vientos interactiva (Plotly) a partir de una columna de direcciones en grados,
+    mostrando porcentajes.
+    """
+    values = df[dir_col].dropna().values
+    if len(values) == 0:
+        raise ValueError(f"La columna '{dir_col}' está vacía o no existe en el DataFrame.")
+    angles = np.deg2rad(values)
+    bin_edges = np.linspace(0, 2 * np.pi, bins + 1)
+    counts, _ = np.histogram(angles, bins=bin_edges)
+    total = counts.sum()
+    percentages = counts / total * 100
+    sector_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    theta_deg = np.rad2deg(sector_centers)
+
+    df_wind = pd.DataFrame({'Frecuencia (%)': percentages, 'Dirección (°)': theta_deg})
+    fig = px.bar_polar(
+        df_wind,
+        r='Frecuencia (%)',
+        theta='Dirección (°)',
+        color='Frecuencia (%)',
+        title=title,
+        template=None
+    )
+    fig.update_traces(hovertemplate='Dirección: %{theta:.0f}°<br>Frecuencia: %{r:.1f}%')
+    fig.update_layout(legend_title_text='Frecuencia (%)')
+    return fig
+
+def create_seasonal_wind_roses_plotly(
+    df,
+    dir_col: str = "WindDir",
+    bins: int = 16
+):
+    """
+    Devuelve 4 graficas:
+    Primavera (3-5), Verano (6-8), Otoño (9-11), Invierno (12,1,2).
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        
+        df.index = pd.to_datetime(df.index)
+
+    seasons = {
+        "Primavera": [3, 4, 5],
+        "Verano":    [6, 7, 8],
+        "Otoño":     [9, 10, 11],
+        "Invierno":  [12, 1, 2],
+    }
+    figs = {}
+    for name, months in seasons.items():
+        df_season = df[df.index.month.isin(months)]
+        if df_season.empty:
+            figs[name] = None
+        else:
+            figs[name] = create_wind_rose_plotly(
+                df_season,
+                dir_col=dir_col,
+                bins=bins,
+                title=f"Rosa de vientos — {name}"
+            )
+    return figs
+
+
+def create_seasonal_wind_roses_by_speed_plotly(#ESTA SI 
+    df,
+    dir_col='WindDir',
+    speed_col='WS_ms_Avg',
+    dir_bins=16,
+    speed_bins=None
+):
+    """
+    Genera un diccionario de rosas de viento interactivas (Plotly) apiladas por velocidad,
+    una por cada estación: Primavera, Verano, Otoño e Invierno.
+
+    Parámetros:
+    - df: DataFrame con DatetimeIndex y columnas de dirección y velocidad.
+    - dir_col: columna de dirección (grados).
+    - speed_col: columna de velocidad (WS_ms_Avg).
+    - dir_bins: número de sectores direccionales.
+    - speed_bins: lista de valores límite para categorizar velocidad.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    if speed_bins is None:
+        speed_bins = [0, 2, 4, 6, 8, np.inf]
+    speed_labels = [f"{speed_bins[i]}–{speed_bins[i+1]}" for i in range(len(speed_bins)-1)]
+    seasons = {
+        'Primavera': [3, 4, 5],
+        'Verano':    [6, 7, 8],
+        'Otoño':     [9, 10, 11],
+        'Invierno':  [12, 1, 2]
+    }
+    figs = {}
+    for name, months in seasons.items():
+        df_season = df[df.index.month.isin(months)].copy()
+        if df_season.empty:
+            figs[name] = None
+        else:
+            figs[name] = create_wind_rose_by_speed_period(
+                df_season,
+                dir_col=dir_col,
+                speed_col=speed_col,
+                dir_bins=dir_bins,
+                speed_bins=speed_bins,
+                title=None
+            )
+            figs[name].update_traces(
+                hovertemplate='Dirección: %{theta}°<br>Frecuencia: %{r:.1f}%'
+            )
+            figs[name].update_layout(
+                legend_title_text='Velocidad (m/s)',
+                polar=dict(angularaxis=dict(rotation=90, direction='clockwise'))
+            )
+    return figs
+
+def create_typical_wind_heatmap(df, speed_col="WS_ms_Avg"): #ESTA SI 
+    """
+    Genera un heatmap 'anual típico' de velocidad de viento.
+    - df: DataFrame con índice datetime y columna de velocidad (speed_col).
+    - speed_col: nombre de la columna de velocidad de viento (en m/s).
+    Retorna: un Plotly Figure con heatmap. 
+      Eje x: cada día típico del año (cadenas "Ene 01", "Ene 02", …, "Dic 31"),
+      eje y: hora (0–23),
+
+    """
+    df2 = df.copy()
+    if not isinstance(df2.index, pd.DatetimeIndex):
+        df2.index = pd.to_datetime(df2.index)
+
+    df2["Month"] = df2.index.month
+    df2["Day"]   = df2.index.day
+    df2["Hour"]  = df2.index.hour
+
+    grp = df2.groupby(["Month", "Day", "Hour"])[speed_col].mean().reset_index()
+
+    grp = grp[~((grp["Month"] == 2) & (grp["Day"] == 29))]
+
+    grp["Date2001"] = pd.to_datetime(
+        dict(year=2001, month=grp["Month"], day=grp["Day"])
+    )
+
+    pivot = grp.pivot(index="Hour", columns="Date2001", values=speed_col)
+
+    pivot = pivot.fillna(0.0)
+
+    x_labels = [d.strftime("%b %d") for d in pivot.columns]
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=pivot.values,
+            x=x_labels,         # "Ene 01", "Ene 02", …, "Dic 31"
+            y=pivot.index,      # horas (0..23)
+            colorscale="Viridis",
+            colorbar=dict(title="Velocidad (m/s)"),
+            hovertemplate=(
+                "Día: %{x}<br>"
+                "Hora: %{y}:00<br>"
+                "Vel: %{z:.2f} m/s<extra></extra>"
+            )
+        )
+    )
+    primeros_de_mes = pd.to_datetime([
+        "2001-01-01", "2001-02-01", "2001-03-01", "2001-04-01",
+        "2001-05-01", "2001-06-01", "2001-07-01", "2001-08-01",
+        "2001-09-01", "2001-10-01", "2001-11-01", "2001-12-01"
+    ]).strftime("%b %d").tolist()
+
+    tickvals = [x_labels.index(label) for label in primeros_de_mes]
+    ticktext = ["1 Ene", "1 Feb", "1 Mar", "1 Abr", "1 May", "1 Jun",
+                "1 Jul", "1 Ago", "1 Sep", "1 Oct", "1 Nov", "1 Dic"]
+
+    fig.update_layout(
+        title=None,
+        xaxis=dict(
+            title="Día",
+            tickmode="array",
+            tickvals=tickvals,
+            ticktext=ticktext,
+            showgrid=False,
+            tickangle=45
+        ),
+        yaxis=dict(
+            title="Hora del día",
+            tickmode="array",
+            tickvals=list(range(0, 24, 2)),  # etiquetas cada 2 horas
+            showgrid=False
+        ),
+        margin=dict(t=50, b=80, l=60, r=20),
+        autosize=True ,
+    )
+
+    return fig
+
+
+def create_seasonal_wind_heatmaps(df, speed_col="WS_ms_Avg"): #esta si 
+    """
+    Genera un heatmap de velocidad de viento para cada estación:
+      · Primavera: meses [3, 4, 5] → mínimo de días: 30 (abril)
+      · Verano:    meses [6, 7, 8] → mínimo de días: 30 (junio)
+      · Otoño:     meses [9, 10, 11] → mínimo de días: 30 (septiembre)
+      · Invierno:  meses [12, 1, 2] → mínimo de días: 28 (febrero, no bisiesto)
+    Para cada estación:
+      1. Filtra todas las filas cuyo índice cae en esos meses.
+      2. Agrupa por (Month, Day, Hour) para promediar la velocidad entre años.
+      3. Calcula, para cada estación, el número mínimo de días compartidos (min_days)
+         usando calendar.monthrange(2001, mes)[1].
+      4. Filtra los días mayores a min_days (por ejemplo, descarta día 31 para primavera).
+      5. Agrupa por (Day, Hour) ignorando Month, de modo que “día 1” promedia
+         (Marzo 1 + Abril 1 + Mayo 1) a cada hora, etc.
+      6. Construye un DataFrame pivot de shape 24 × min_days (índice=Hour, columnas=Day).
+    """
+    df2 = df.copy()
+    if not isinstance(df2.index, pd.DatetimeIndex):
+        df2.index = pd.to_datetime(df2.index)
+
+    df2["Month"] = df2.index.month
+    df2["Day"]   = df2.index.day
+    df2["Hour"]  = df2.index.hour
+
+    season_months = {
+        "Primavera": [3, 4, 5],
+        "Verano":    [6, 7, 8],
+        "Otoño":     [9, 10, 11],
+        "Invierno":  [12, 1, 2],
+    }
+
+    figs = {}
+    for season, meses in season_months.items():
+        df_season = df2[df2["Month"].isin(meses)].copy()
+        if df_season.empty:
+            fig_empty = go.Figure()
+            fig_empty.add_annotation(
+                xref="paper", yref="paper",
+                x=0.5, y=0.5,
+                text=f"No hay datos para {season}",
+                showarrow=False
+            )
+            figs[season] = fig_empty
+            continue
+
+        grouped = (
+            df_season
+            .groupby(["Month", "Day", "Hour"])[speed_col]
+            .mean()
+            .reset_index()
+        )
+
+        grouped = grouped[~((grouped["Month"] == 2) & (grouped["Day"] == 29))]
+
+        days_per_month = [calendar.monthrange(2001, m)[1] for m in meses]
+        min_days = min(days_per_month)
+
+        grouped_filt = grouped[grouped["Day"] <= min_days].copy()
+
+        pivot_source = (
+            grouped_filt
+            .groupby(["Day", "Hour"])[speed_col]
+            .mean()
+            .reset_index()
+        )
+
+        pivot = pivot_source.pivot(index="Hour", columns="Day", values=speed_col)
+
+        pivot = pivot.fillna(0.0)
+
+        fig = go.Figure(
+            data=go.Heatmap(
+                z=pivot.values,
+                x=pivot.columns.astype(str),  # días 1..min_days
+                y=pivot.index.astype(int),    # horas 0..23
+                colorscale="Viridis",
+                colorbar=dict(title="m/s"),
+                hovertemplate=(
+                    "Día %{x}<br>Hora: %{y}:00<br>"
+                    "Vel: %{z:.2f} m/s<extra></extra>"
+                )
+            )
+        )
+        fig.update_layout(
+            title=None,
+            xaxis=dict(
+                title="Día",
+                showgrid=False
+            ),
+            yaxis=dict(
+                title="Hora del día",
+                tickmode="array",
+                tickvals=list(range(0, 24, 2)),
+                showgrid=False
+            ),
+            margin=dict(t=50, b=40, l=60, r=20)
+        )
+
+        figs[season] = fig
+
+    return figs
+def make_sam_wind_csv(
+    esolmet: pd.DataFrame,
+    ini_path: str = "configuration.ini",
+    output_csv: str = "sam_wind.csv"
+) -> Path:
+    """
+    Genera un CSV TMY (8760 h) compatible con PySAM usando la configuración
+    en 'configuration.ini'. Devuelve la ruta al CSV terminado.
+    """
+    (
+        variables,
+        latitude,
+        longitude,
+        gmt,
+        name,
+        alias,
+        site_id,
+        data_tz,
+        wind_speed_height,
+        air_temperature_height,
+        air_pressure_height,
+    ) = load_settings(ini_path)
+
+
+    needed_cols = ["WS_ms_Avg", "WindDir", "AirTC_Avg", "CS106_PB_Avg"]
+    df2 = esolmet[needed_cols].copy()
+
+    df2["WS_ms_Avg"]    = pd.to_numeric(df2["WS_ms_Avg"], errors="coerce")
+    df2["WindDir"]      = pd.to_numeric(df2["WindDir"],   errors="coerce")
+    df2["AirTC_Avg"]    = pd.to_numeric(df2["AirTC_Avg"], errors="coerce")
+    df2["CS106_PB_Avg"] = pd.to_numeric(df2["CS106_PB_Avg"], errors="coerce")
+
+    df_hourly = df2.resample("1h").agg({
+        "WS_ms_Avg":    ["mean", "std"],
+        "WindDir":      "mean",
+        "AirTC_Avg":    "mean",
+        "CS106_PB_Avg": "mean",
+    })
+    df_hourly.columns = ["WS_mean", "WS_std", "WindDir", "Temperature", "Pressure_mbar"]
+    df_hourly = df_hourly.ffill()
+
+    df_hourly.index.name = "fecha"
+
+    df_hourly = df_hourly[~((df_hourly.index.month == 2) & (df_hourly.index.day == 29))]
+    df_hourly = df_hourly.ffill()
+
+    df_hourly["Pressure_mbar"] = df_hourly["Pressure_mbar"] * 100
+
+    df_hourly = df_hourly.reset_index()
+
+    df_hourly = df_hourly.rename(columns={
+        "WS_mean":       "wind_speed",
+        "WindDir":       "wind_direction",
+        "Temperature":   "temperature",
+        "Pressure_mbar": "pressure"
+    })
+
+    df_hourly["Month"] = df_hourly["fecha"].dt.month
+    df_hourly["Day"]   = df_hourly["fecha"].dt.day
+    df_hourly["Hour"]  = df_hourly["fecha"].dt.hour
+
+    tmy = (
+        df_hourly
+        .groupby(["Month", "Day", "Hour"])[
+            ["wind_speed", "wind_direction", "temperature", "pressure"]
+        ]
+        .mean()
+        .reset_index()
+    )
+    tmy["Year"] = 2001  
+
+    df_out = tmy[[
+        "Year", "Month", "Day", "Hour",
+        "wind_speed", "wind_direction", "temperature", "pressure"
+    ]]
+
+    header_varnames = [
+        "Year", "Month", "Day", "Hour",
+        f"wind speed at {int(wind_speed_height)}m (m/s)",
+        f"wind direction at {int(wind_speed_height)}m (deg)",
+        f"air temperature at {int(air_temperature_height)}m (C)",
+        f"air pressure at {int(air_pressure_height)}m (Pa)"
+    ]
+
+    loc_row = (
+        f"SiteID,{site_id}, Site Timezone,{data_tz},"
+        f"Data Timezone,{data_tz},Longitude,{longitude},Latitude,{latitude}\n"
+    )
+    meta_row = ",".join(header_varnames) + "\n"
+
+    out_path= Path(output_csv)
+    with out_path.open("w", encoding="utf-8") as f:
+        f.write(loc_row)
+        f.write(meta_row)
+    df_out.to_csv(
+        out_path,
+        mode="a",
+        index=False,
+        header=False,
+        sep=",",
+    )
+
+    return out_path
+
+def run_wind_simulation(  #ESTA SI 
+    esolmet_df,
+    turbine_name: str,
+    ini_path: str = "configuration.ini",
+    wind_turbine_file: str = "wind-turbines2.json",
+    wind_inputs_file: str = "windpower-inputs.json",
+    output_csv: str = "sam_wind.csv",
+) -> dict:
+    """
+    Crea el CSV TMY (vía make_sam_wind_csv), carga PySAM.Windpower,
+    fija los parámetros y ejecuta la simulación para la turbina `turbine_name`.
+    """
+
+    try:
+        csv_path = make_sam_wind_csv(
+            esolmet_df,
+            ini_path=ini_path,
+            output_csv=output_csv,
+        )
+    except Exception as e:
+        return {"error": f"Error al generar el CSV de viento: {e}"}
+
+    wind = wp.new()
+
+    try:
+        with open(wind_inputs_file, "r", encoding="utf-8") as f:
+            sam_data = json.load(f)
+    except FileNotFoundError:
+        return {"error": f"No se encontró el archivo '{wind_inputs_file}'"}
+
+    for key, val in sam_data.items():
+        if key != "wind_resource_filename":
+            wind.value(key, val)
+
+    wind.value("wind_resource_filename", str(csv_path))
+    wind.value("wind_resource_shear", 0.14)
+    wind.value("wind_farm_wake_model", 0)
+
+    try:
+        with open(wind_turbine_file, "r", encoding="utf-8") as f:
+            turbine_list = json.load(f)
+    except FileNotFoundError:
+        return {"error": f"No se encontró el archivo '{wind_turbine_file}'"}
+
+    selected_turbine = next((t for t in turbine_list if t["name"] == turbine_name), None)
+    if selected_turbine is None:
+        return {"error": f"No existe el modelo “{turbine_name}” en '{wind_turbine_file}'"}
+
+    wind.value("wind_farm_xCoordinates", [0])
+    wind.value("wind_farm_yCoordinates", [0])
+    wind.value("wind_turbine_rotor_diameter", selected_turbine["rotor_diameter"])
+    wind.value("wind_turbine_powercurve_windspeeds", selected_turbine["wind_speeds"])
+    wind.value("wind_turbine_powercurve_powerout", selected_turbine["turbine_powers"])
+    wind.value("wind_turbine_hub_ht", selected_turbine["hub_height"])
+
+    farm_capacity = 1 * selected_turbine["rated_power"]
+    wind.value("system_capacity", farm_capacity)
+
+    try:
+        wind.execute()
+    except Exception as e:
+        msg = str(e)
+        if "closest wind speed measurement height" in msg:
+            return {
+                "error": "No podemos realizar la simulacion con esta turbina debido a las condiciones "
+                         "de medición de viento en este sitio."
+            }
+        return { "error": f"PySAM Windpower execution error: {msg}" }
+
+
+    annual_energy = getattr(wind.Outputs, "annual_energy", None)
+    capacity_factor = getattr(wind.Outputs, "capacity_factor", None)
+    wake_losses = getattr(wind.Outputs, "wake_losses", None)
+    turb_losses = getattr(wind.Outputs, "turb_losses", None)
+    monthly_energy = getattr(wind.Outputs, "monthly_energy", None)
+    gen_hourly = wind.Outputs.gen
+
+
+    if annual_energy is None or capacity_factor is None:
+        return {"error": "No se pudieron leer los resultados de PySAM."}
+
+    return {
+        "Energia Anual (kWh)": annual_energy,
+        "Factor de Capacidad": capacity_factor,
+        "Perdida por estela (kWh)": wake_losses,
+        "Perdida por turbina (kWh)": turb_losses,
+        "Monthly Energy":  monthly_energy,
+        "gen": gen_hourly,
+ 
+    }
+def create_monthly_energy_figure(monthly_array): #esta si
+    """
+    Dado un arreglo de 12 valores (energía mensual en kWh), construye
+    y devuelve un Plotly.Figure con gráfico de barras:
+      - Fondo blanco
+      - Cuadrícula gris claro
+      - Eje X: meses (Ene, Feb, …)
+      - Eje Y: energía en kWh
+    """
+    if monthly_array is None or len(monthly_array) != 12:
+        raise ValueError("El arreglo mensual debe tener exactamente 12 elementos.")
+    
+    meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
+             "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=meses,
+                y=monthly_array,
+                marker_color="steelblue"
+            )
+        ]
+    )
+
+    fig.update_layout(
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis_title="Mes",
+        yaxis=dict(
+            title_text="Energía (kWh)",
+            showgrid=True,
+            gridcolor="lightgrey",   
+            zeroline=False
+        ),
+        margin=dict(t=40, b=40, l=40, r=20)
+    )
+    return fig
+
+def create_seasonal_generation_figures(gen_array): #ESTA SI 
+    """
+    Dado gen_array (lista o array de 8760 valores horarios de generación),
+    construye un índice datetime para un año no bisiesto (2001) con frecuencia 'H', 
+    filtra los 3 meses de cada estación (Primavera: 3,4,5; Verano: 6,7,8; Otoño: 9,10,11; Invierno: 12,1,2),
+    y para cada estación agrupa por día del mes sumando las 24 h correspondientes para obtener
+    un “mes típico” de 28–31 días.
+    """
+
+    index = pd.date_range("2001-01-01 00:00", periods=len(gen_array), freq="H")
+    df = pd.DataFrame({"gen": gen_array}, index=index)
+
+    season_months = {
+        "Primavera": [3, 4, 5],
+        "Verano":    [6, 7, 8],
+        "Otoño":     [9, 10, 11],
+        "Invierno":  [12, 1, 2],
+    }
+
+    figs = {}
+    for season, meses in season_months.items():
+        df_season = df[df.index.month.isin(meses)].copy()
+
+        if df_season.empty:
+            figs[season] = go.Figure().add_annotation(
+                text=f"No hay datos para {season}",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.5, y=0.5
+            )
+            continue
+
+        df_season["Día"]  = df_season.index.day
+        df_season["Hora"] = df_season.index.hour
+
+        daily_hourly = (
+            df_season
+            .groupby(["Día", "Hora"])["gen"]
+            .sum()
+            .reset_index()
+        )
+
+        daily = (
+            daily_hourly
+            .groupby("Día")["gen"]
+            .sum()
+            .reset_index(name="energy_kWh")
+        )
+
+        fig = go.Figure(
+            data=[
+                go.Scatter(
+                    x=daily["Día"].astype(int).astype(str),
+                    y=daily["energy_kWh"], mode='lines',
+                    line=dict(color="steelblue", width=2),        
+                    name=season,
+                )
+            ]
+        )
+        fig.update_layout(
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            xaxis=dict(
+                title_text="Día del mes",
+                showgrid=True,
+                gridcolor="lightgrey",
+                zeroline=False
+            ),
+            yaxis=dict(
+                title_text="Energía (kWh)",
+                showgrid=True,
+                gridcolor="lightgrey",
+                zeroline=False
+            ),
+            margin=dict(t=40, b=30, l=40, r=20),
+        )
+        figs[season] = fig
+
+    return figs
+
+def create_generation_heatmap(gen_array):
+    """
+    Dado gen_array (lista o array de 8760 valores horarios de generación),
+    construye un índice datetime para un año no bisiesto (2001) con frecuencia 'H',
+    luego pinta un heatmap donde:
+      - eje x = cada día del año (formato "Ene 01", "Ene 02", ... "Dic 31")
+      - eje y = horas del día (0 – 23)
+
+    """
+
+    index = pd.date_range("2001-01-01 00:00", periods=len(gen_array), freq="h")
+
+    df = pd.DataFrame({"gen": gen_array}, index=index)
+
+    df["Date"] = df.index.date
+    df["Hour"] = df.index.hour
+
+    pivot = df.pivot(index="Hour", columns="Date", values="gen")
+
+    x_labels = [pd.to_datetime(d).strftime("%b %d") for d in pivot.columns]
+
+    y_vals = pivot.index.tolist()            # [0, 1, 2, ..., 23]
+    z_vals = pivot.values                    
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            x=x_labels,
+            y=y_vals,
+            z=z_vals,
+            colorscale="jet",
+            colorbar=dict(title="kWh"),
+            hovertemplate="Día: %{x}<br>Hora: %{y}:00<br>Gen: %{z:.2f} kWh<extra></extra>",
+        )
+    )
+
+    fig.update_layout(
+        xaxis=dict(
+            title="Día",
+            tickmode="array",
+            tickvals=[x_labels[i] for i in range(0, len(x_labels), 20)],
+            tickangle=45,
+        ),
+        yaxis=dict(
+            title="Hora",
+            tickmode="array",
+            tickvals=list(range(0, 24)),
+        ),
+        margin=dict(t=50, b=120, l=60, r=40),
+        height=500,
+    )
+
+    return fig
+
+def _build_rose(#ESTA SI
+    df: pd.DataFrame,
+    dir_col: str,
+    speed_col: str,
+    dir_bins: int = 16,
+    speed_bins=None,
+    title: str = None
+):
+    """
+    Función interna que genera la rosa de vientos (Plotly bar_polar)
+    a partir de un DataFrame ya filtrado (sin NaNs), etiquetado y recategorizado.
+    - df: DataFrame con índice datetime y columnas `dir_col` y `speed_col`.
+    - dir_col: nombre de la columna de dirección (en grados 0–360).
+    - speed_col: nombre de la columna de velocidad (en m/s).
+    - dir_bins: número de sectores para la dirección (default 16).
+
+    """
+
+    df2 = df.copy()
+
+    if not isinstance(df2.index, pd.DatetimeIndex):
+        df2.index = pd.to_datetime(df2.index)
+
+    if speed_bins is None:
+        max_speed = df2[speed_col].max()
+        upper = np.ceil(max_speed / 1.5) * 1.5
+        bins = np.arange(0, upper + 1e-6, 1.5)
+        speed_bins = list(bins)
+
+    speed_labels = []
+    for i in range(len(speed_bins) - 1):
+        low, high = speed_bins[i], speed_bins[i + 1]
+        if i < len(speed_bins) - 2:
+            speed_labels.append(f"{low:.1f}–{high:.1f}")
+        else:
+            speed_labels.append(f">{low:.1f}")
+
+    df2 = df2[[dir_col, speed_col]].dropna()
+
+    df2["Velocidad"] = pd.cut(
+        df2[speed_col],
+        bins=speed_bins,
+        labels=speed_labels,
+        right=False
+    )
+
+    deg_bins = np.linspace(0, 360, dir_bins + 1)
+    deg_labels = [(deg_bins[i] + deg_bins[i + 1]) / 2 for i in range(dir_bins)]
+    df2["Direccion"] = pd.cut(
+        df2[dir_col] % 360,
+        bins=deg_bins,
+        labels=deg_labels,
+        right=False
+    )
+
+    df_counts = df2.groupby(["Direccion", "Velocidad"]).size().reset_index(name="count")
+    total = df_counts["count"].sum()
+    df_counts["Frecuencia"] = df_counts["count"] / total * 100
+
+    fig = px.bar_polar(
+        df_counts,
+        r="Frecuencia",
+        theta="Direccion",
+        color="Velocidad",
+        title=title,
+        template=None,
+        category_orders={"Velocidad": speed_labels}
+    )
+    fig.update_traces(hovertemplate="Dirección: %{theta}°<br>Frecuencia: %{r:.1f}%")
+    fig.update_layout(legend_title_text="Velocidad (m/s)")
+
+    return fig
+
+
+
+def create_wind_rose_by_speed_day( #ESTA SI
+    df: pd.DataFrame,
+    dir_col: str = "WindDir",
+    speed_col: str = "WS_ms_Avg",
+    dir_bins: int = 16,
+    speed_bins=None
+):
+    """
+    Filtro “diurno” horas de 6:00 (incluida) hasta 17:59 (incluida).
+    Luego delega en _build_rose() para armar la rosa con todos los puntos diurnos.
+    """
+    df2 = df.copy()
+    if not isinstance(df2.index, pd.DatetimeIndex):
+        df2.index = pd.to_datetime(df2.index)
+
+    df_day = df2.between_time("06:00", "17:59")
+    title = "Día (06:00–17:59)"
+    return _build_rose(df_day, dir_col, speed_col, dir_bins, speed_bins, title)
+
+
+
+def create_wind_rose_by_speed_night( #ESTA SI
+    df: pd.DataFrame,
+    dir_col: str = "WindDir",
+    speed_col: str = "WS_ms_Avg",
+    dir_bins: int = 16,
+    speed_bins=None
+):
+    """
+    Filtro “nocturno” horas de 18:00 a 05:59 (con salto de día).
+    Luego delega en _build_rose() para armar la rosa con todos los puntos nocturnos.
+    """
+    df2 = df.copy()
+    if not isinstance(df2.index, pd.DatetimeIndex):
+        df2.index = pd.to_datetime(df2.index)
+
+    df_night_1 = df2.between_time("18:00", "23:59")
+    df_night_2 = df2.between_time("00:00", "05:59")
+    df_night = pd.concat([df_night_1, df_night_2]).sort_index()
+
+    title = "Noche (18:00–05:59)"
+    return _build_rose(df_night, dir_col, speed_col, dir_bins, speed_bins, title)
