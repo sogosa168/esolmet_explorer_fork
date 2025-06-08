@@ -374,7 +374,6 @@ def create_typical_wind_heatmap(
         row=2, col=2
     )
 
-    # — 7) Ajustes finales —
     fig.update_layout(
         margin=dict(t=30, b=40, l=60, r=40),
         height=600,
