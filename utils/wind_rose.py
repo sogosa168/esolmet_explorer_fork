@@ -9,7 +9,8 @@ from pathlib import Path
 import PySAM.Windpower as wp
 import json
 import calendar                     
-
+from plotly.subplots import make_subplots
+from plotly.subplots import make_subplots
 variables, latitude, longitude, gmt, name, alias, \
     site_id, data_tz, wind_speed_height, air_temperature_height, air_pressure_height = load_settings()
 
@@ -228,7 +229,6 @@ def create_seasonal_wind_roses_by_speed_plotly(#ESTA SI
     - dir_col: columna de dirección (grados).
     - speed_col: columna de velocidad (WS_ms_Avg).
     - dir_bins: número de sectores direccionales.
-    - speed_bins: lista de valores límite para categorizar velocidad.
     """
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index)
@@ -264,105 +264,162 @@ def create_seasonal_wind_roses_by_speed_plotly(#ESTA SI
             )
     return figs
 
-def create_typical_wind_heatmap(df, speed_col="WS_ms_Avg"): #ESTA SI 
-    """
-    Genera un heatmap 'anual típico' de velocidad de viento.
-    - df: DataFrame con índice datetime y columna de velocidad (speed_col).
-    - speed_col: nombre de la columna de velocidad de viento (en m/s).
-    Retorna: un Plotly Figure con heatmap. 
-      Eje x: cada día típico del año (cadenas "Ene 01", "Ene 02", …, "Dic 31"),
-      eje y: hora (0–23),
-
-    """
+def create_typical_wind_heatmap(
+    df,
+    speed_col="WS_ms_Avg",
+    start: str | None = None,
+    end:   str | None = None,
+):
     df2 = df.copy()
     if not isinstance(df2.index, pd.DatetimeIndex):
         df2.index = pd.to_datetime(df2.index)
+    if start:
+        df2 = df2.loc[pd.to_datetime(start):]
+    if end:
+        df2 = df2.loc[:pd.to_datetime(end)]
 
     df2["Month"] = df2.index.month
     df2["Day"]   = df2.index.day
     df2["Hour"]  = df2.index.hour
 
-    grp = df2.groupby(["Month", "Day", "Hour"])[speed_col].mean().reset_index()
+    daily = (
+        df2
+        .groupby(["Month", "Day"])[speed_col]
+        .mean()
+        .reset_index()
+    )
+    daily = daily[~((daily["Month"] == 2) & (daily["Day"] == 29))]
 
+    daily["Date2001"] = pd.to_datetime(dict(
+        year=2001,
+        month=daily["Month"],
+        day=daily["Day"]
+    ))
+    daily = daily.sort_values("Date2001")
+    daily_avg = daily.set_index("Date2001")[speed_col]
+
+    hourly = (
+        df2
+        .groupby("Hour")[speed_col]
+        .mean()
+        .reset_index()
+    )
+    hourly_avg = hourly.set_index("Hour")[speed_col]
+
+    grp = (
+        df2
+        .groupby(["Month", "Day", "Hour"])[speed_col]
+        .mean()
+        .reset_index()
+    )
     grp = grp[~((grp["Month"] == 2) & (grp["Day"] == 29))]
+    grp["Date2001"] = pd.to_datetime(dict(
+        year=2001,
+        month=grp["Month"],
+        day=grp["Day"]
+    ))
 
-    grp["Date2001"] = pd.to_datetime(
-        dict(year=2001, month=grp["Month"], day=grp["Day"])
+    pivot = (
+        grp
+        .pivot(index="Hour", columns="Date2001", values=speed_col)
+        .fillna(0.0)
     )
 
-    pivot = grp.pivot(index="Hour", columns="Date2001", values=speed_col)
+    fig = make_subplots(
+        rows=2, cols=2,
+        specs=[[{"type":"scatter"}, None],
+               [{"type":"heatmap"},{"type":"scatter"}]],
+        row_heights=[0.2,0.8],
+        column_widths=[0.8,0.2],
+        shared_xaxes=True,
+        shared_yaxes=True,
+        vertical_spacing=0.02,
+        horizontal_spacing=0.02,
+    )
 
-    pivot = pivot.fillna(0.0)
+    fig.add_trace(
+        go.Scatter(
+            x=daily_avg.index,
+            y=daily_avg.values,
+            mode="lines",
+            name="Promedio diario típico",
+            hovertemplate="Día: %{x|%b %d}<br>Vel: %{y:.2f} m/s<extra></extra>"
 
-    x_labels = [d.strftime("%b %d") for d in pivot.columns]
+        ),
+        row=1, col=1
+    )
 
-    fig = go.Figure(
-        data=go.Heatmap(
+    fig.add_trace(
+        go.Heatmap(
             z=pivot.values,
-            x=x_labels,         # "Ene 01", "Ene 02", …, "Dic 31"
-            y=pivot.index,      # horas (0..23)
+            x=list(pivot.columns),
+            y=list(pivot.index),
             colorscale="Viridis",
-            colorbar=dict(title="Velocidad (m/s)"),
-            hovertemplate=(
-                "Día: %{x}<br>"
-                "Hora: %{y}:00<br>"
-                "Vel: %{z:.2f} m/s<extra></extra>"
-            )
-        )
+            colorbar=dict(title="m/s"),
+            hovertemplate="Día: %{x|%b %d}<br>Hora: %{y}:00<br>Vel: %{z:.2f}<extra></extra>"
+        ),
+        row=2, col=1
     )
-    primeros_de_mes = pd.to_datetime([
-        "2001-01-01", "2001-02-01", "2001-03-01", "2001-04-01",
-        "2001-05-01", "2001-06-01", "2001-07-01", "2001-08-01",
-        "2001-09-01", "2001-10-01", "2001-11-01", "2001-12-01"
-    ]).strftime("%b %d").tolist()
 
-    tickvals = [x_labels.index(label) for label in primeros_de_mes]
-    ticktext = ["1 Ene", "1 Feb", "1 Mar", "1 Abr", "1 May", "1 Jun",
-                "1 Jul", "1 Ago", "1 Sep", "1 Oct", "1 Nov", "1 Dic"]
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg.values,
+            y=hourly_avg.index,
+            mode="lines",
+            orientation="h",
+            name="Promedio horario típico",
+            hovertemplate="Hora: %{y}:00<br>Vel: %{y:.2f} m/s<extra></extra>"
 
+        ),
+        row=2, col=2
+    )
+
+    # — 7) Ajustes finales —
     fig.update_layout(
-        title=None,
-        xaxis=dict(
-            title="Día",
-            tickmode="array",
-            tickvals=tickvals,
-            ticktext=ticktext,
-            showgrid=False,
-            tickangle=45
-        ),
-        yaxis=dict(
-            title="Hora del día",
-            tickmode="array",
-            tickvals=list(range(0, 24, 2)),  # etiquetas cada 2 horas
-            showgrid=False
-        ),
-        margin=dict(t=50, b=80, l=60, r=20),
-        autosize=True ,
+        margin=dict(t=30, b=40, l=60, r=40),
+        height=600,
+        showlegend=False,
     )
+    fig.update_xaxes(
+        row=2, col=1,
+        type="date",
+        tickformat="%b %d",
+        title_text="Día del año"
+    )
+
+    fig.update_yaxes(
+        row=2, col=1,
+        tickmode="array",
+        tickvals=list(range(0,24,2)),
+        title_text="Hora del día"
+    )
+    fig.update_yaxes(matches="y2", row=2, col=2)
 
     return fig
 
 
-def create_seasonal_wind_heatmaps(df, speed_col="WS_ms_Avg"): #esta si 
+def create_seasonal_wind_heatmaps(
+    df,
+    speed_col: str = "WS_ms_Avg",
+    start: str | None = None,
+    end:   str | None = None,
+):
     """
     Genera un heatmap de velocidad de viento para cada estación:
       · Primavera: meses [3, 4, 5] → mínimo de días: 30 (abril)
       · Verano:    meses [6, 7, 8] → mínimo de días: 30 (junio)
       · Otoño:     meses [9, 10, 11] → mínimo de días: 30 (septiembre)
       · Invierno:  meses [12, 1, 2] → mínimo de días: 28 (febrero, no bisiesto)
-    Para cada estación:
-      1. Filtra todas las filas cuyo índice cae en esos meses.
-      2. Agrupa por (Month, Day, Hour) para promediar la velocidad entre años.
-      3. Calcula, para cada estación, el número mínimo de días compartidos (min_days)
-         usando calendar.monthrange(2001, mes)[1].
-      4. Filtra los días mayores a min_days (por ejemplo, descarta día 31 para primavera).
-      5. Agrupa por (Day, Hour) ignorando Month, de modo que “día 1” promedia
-         (Marzo 1 + Abril 1 + Mayo 1) a cada hora, etc.
-      6. Construye un DataFrame pivot de shape 24 × min_days (índice=Hour, columnas=Day).
+    start, end: filtros de fecha "YYYY-MM-DD" (inclusivos).
+    Devuelve un dict de Plotly.Figure con claves "Primavera", "Verano", "Otoño", "Invierno".
     """
     df2 = df.copy()
     if not isinstance(df2.index, pd.DatetimeIndex):
         df2.index = pd.to_datetime(df2.index)
+    if start:
+        df2 = df2.loc[pd.to_datetime(start):]
+    if end:
+        df2 = df2.loc[:pd.to_datetime(end)]
 
     df2["Month"] = df2.index.month
     df2["Day"]   = df2.index.day
@@ -377,16 +434,16 @@ def create_seasonal_wind_heatmaps(df, speed_col="WS_ms_Avg"): #esta si
 
     figs = {}
     for season, meses in season_months.items():
-        df_season = df2[df2["Month"].isin(meses)].copy()
+        df_season = df2[df2["Month"].isin(meses)]
         if df_season.empty:
-            fig_empty = go.Figure()
-            fig_empty.add_annotation(
+            fig = go.Figure()
+            fig.add_annotation(
                 xref="paper", yref="paper",
                 x=0.5, y=0.5,
                 text=f"No hay datos para {season}",
                 showarrow=False
             )
-            figs[season] = fig_empty
+            figs[season] = fig
             continue
 
         grouped = (
@@ -395,51 +452,38 @@ def create_seasonal_wind_heatmaps(df, speed_col="WS_ms_Avg"): #esta si
             .mean()
             .reset_index()
         )
-
         grouped = grouped[~((grouped["Month"] == 2) & (grouped["Day"] == 29))]
 
         days_per_month = [calendar.monthrange(2001, m)[1] for m in meses]
         min_days = min(days_per_month)
 
-        grouped_filt = grouped[grouped["Day"] <= min_days].copy()
+        grouped = grouped[grouped["Day"] <= min_days]
 
-        pivot_source = (
-            grouped_filt
+        pivot = (
+            grouped
             .groupby(["Day", "Hour"])[speed_col]
             .mean()
             .reset_index()
+            .pivot(index="Hour", columns="Day", values=speed_col)
+            .fillna(0.0)
         )
 
-        pivot = pivot_source.pivot(index="Hour", columns="Day", values=speed_col)
-
-        pivot = pivot.fillna(0.0)
-
         fig = go.Figure(
-            data=go.Heatmap(
+            go.Heatmap(
                 z=pivot.values,
-                x=pivot.columns.astype(str),  # días 1..min_days
-                y=pivot.index.astype(int),    # horas 0..23
+                x=pivot.columns.astype(str),
+                y=pivot.index,
                 colorscale="Viridis",
                 colorbar=dict(title="m/s"),
-                hovertemplate=(
-                    "Día %{x}<br>Hora: %{y}:00<br>"
-                    "Vel: %{z:.2f} m/s<extra></extra>"
-                )
+                hovertemplate="Día %{x}<br>Hora: %{y}:00<br>Vel: %{z:.2f} m/s<extra></extra>"
             )
         )
         fig.update_layout(
-            title=None,
-            xaxis=dict(
-                title="Día",
-                showgrid=False
-            ),
-            yaxis=dict(
-                title="Hora del día",
-                tickmode="array",
-                tickvals=list(range(0, 24, 2)),
-                showgrid=False
-            ),
-            margin=dict(t=50, b=40, l=60, r=20)
+            xaxis=dict(title="Día del mes típico", showgrid=False),
+            yaxis=dict(title="Hora del día", tickmode="array",
+                       tickvals=list(range(0,24,2)), showgrid=False),
+            margin=dict(t=20,b=30,l=60,r=20),
+            title_text=None,
         )
 
         figs[season] = fig
@@ -886,45 +930,77 @@ def _build_rose(#ESTA SI
 
 
 
-def create_wind_rose_by_speed_day( #ESTA SI
-    df: pd.DataFrame,
-    dir_col: str = "WindDir",
-    speed_col: str = "WS_ms_Avg",
+def create_wind_rose_by_speed_day(
+    df,
+    dir_col="WindDir",
+    speed_col="WS_ms_Avg",
+    *,                     # fuerza que todo lo que venga a partir de aquí sea keyword-only
+    start: str | None = None,
+    end:   str | None = None,
     dir_bins: int = 16,
-    speed_bins=None
+    speed_bins = None,
+    title: str | None = None,
 ):
     """
-    Filtro “diurno” horas de 6:00 (incluida) hasta 17:59 (incluida).
-    Luego delega en _build_rose() para armar la rosa con todos los puntos diurnos.
+    Filtra por rango y genera la rosa de viento diurna (06:00–18:00).
     """
     df2 = df.copy()
     if not isinstance(df2.index, pd.DatetimeIndex):
         df2.index = pd.to_datetime(df2.index)
+
+    if start:
+        df2 = df2.loc[pd.to_datetime(start) : ]
+    if end:
+        df2 = df2.loc[ : pd.to_datetime(end)]
 
     df_day = df2.between_time("06:00", "17:59")
-    title = "Día (06:00–17:59)"
-    return _build_rose(df_day, dir_col, speed_col, dir_bins, speed_bins, title)
+
+    title = title or f" 06:00-17:59 ({start} — {end})"
+
+    return create_wind_rose_by_speed(
+        df_day,
+        dir_col=dir_col,
+        speed_col=speed_col,
+        dir_bins=dir_bins,
+        speed_bins=speed_bins,
+        title=title,
+    )
 
 
 
-def create_wind_rose_by_speed_night( #ESTA SI
-    df: pd.DataFrame,
-    dir_col: str = "WindDir",
-    speed_col: str = "WS_ms_Avg",
+def create_wind_rose_by_speed_night(
+    df,
+    dir_col="WindDir",
+    speed_col="WS_ms_Avg",
+    *,
+    start: str | None = None,
+    end:   str | None = None,
     dir_bins: int = 16,
-    speed_bins=None
+    speed_bins = None,
+    title: str | None = None,
 ):
     """
-    Filtro “nocturno” horas de 18:00 a 05:59 (con salto de día).
-    Luego delega en _build_rose() para armar la rosa con todos los puntos nocturnos.
+    Filtra por rango y genera la rosa de viento nocturna (18:00–06:00).
     """
     df2 = df.copy()
     if not isinstance(df2.index, pd.DatetimeIndex):
         df2.index = pd.to_datetime(df2.index)
 
-    df_night_1 = df2.between_time("18:00", "23:59")
-    df_night_2 = df2.between_time("00:00", "05:59")
-    df_night = pd.concat([df_night_1, df_night_2]).sort_index()
+    if start:
+        df2 = df2.loc[pd.to_datetime(start) : ]
+    if end:
+        df2 = df2.loc[ : pd.to_datetime(end)]
 
-    title = "Noche (18:00–05:59)"
-    return _build_rose(df_night, dir_col, speed_col, dir_bins, speed_bins, title)
+    noche1 = df2.between_time("18:00", "23:59")
+    noche2 = df2.between_time("00:00", "05:59")
+    df_night = pd.concat([noche1, noche2])
+
+    title = title or f"18:00-05:59 ({start} — {end})"
+    return create_wind_rose_by_speed(
+        df_night,
+        dir_col=dir_col,
+        speed_col=speed_col,
+        dir_bins=dir_bins,
+        speed_bins=speed_bins,
+        title=title,
+    )

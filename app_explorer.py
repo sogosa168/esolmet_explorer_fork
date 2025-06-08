@@ -76,24 +76,30 @@ def server(input, output, session):
 
     @render_widget
     def wind_rose_day():
-
+        start, end = input.wind_period_range()
         return create_wind_rose_by_speed_day(
             esolmet,
             dir_col="WindDir",
             speed_col="WS_ms_Avg",
             dir_bins=16,
-            speed_bins=None
+            speed_bins=None,   
+            start=start,
+            end=end,
         )
 
 
     @render_widget
     def wind_rose_night():
+
+        start, end = input.wind_period_range()
         return create_wind_rose_by_speed_night(
             esolmet,
             dir_col="WindDir",
             speed_col="WS_ms_Avg",
             dir_bins=16,
-            speed_bins=None
+            speed_bins=None,
+            start=start,
+            end=end,
         )
 
 
@@ -136,34 +142,32 @@ def server(input, output, session):
     @output
     @render_widget
     def heatmap_wind_annual():
-        if esolmet is None or esolmet.empty:
-            return None
-
-        return create_typical_wind_heatmap(esolmet, speed_col="WS_ms_Avg")
-
+        start, end = input.heatmap_speed_range()
+        return create_typical_wind_heatmap(esolmet, speed_col="WS_ms_Avg", start=start, end=end)
     @output
     @render_widget
     def heatmap_wind_primavera():
-        figs = create_seasonal_wind_heatmaps(esolmet, speed_col="WS_ms_Avg")
-        return figs["Primavera"]
+        start, end = input.heatmap_speed_range()
+        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Primavera"]
+
 
     @output
     @render_widget
     def heatmap_wind_verano():
-        figs = create_seasonal_wind_heatmaps(esolmet, speed_col="WS_ms_Avg")
-        return figs["Verano"]
+        start, end = input.heatmap_speed_range()
+        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Verano"]
 
     @output
     @render_widget
     def heatmap_wind_otono():
-        figs = create_seasonal_wind_heatmaps(esolmet, speed_col="WS_ms_Avg")
-        return figs["Otoño"]
+        start, end = input.heatmap_speed_range()
+        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Otoño"]
 
     @output
     @render_widget
     def heatmap_wind_invierno():
-        figs = create_seasonal_wind_heatmaps(esolmet, speed_col="WS_ms_Avg")
-        return figs["Invierno"]
+        start, end = input.heatmap_speed_range()
+        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Invierno"]
 
 
     @reactive.Calc
@@ -179,7 +183,7 @@ def server(input, output, session):
             esolmet_df=esolmet,
             turbine_name=modelo,
             ini_path="configuration.ini",
-            wind_turbine_file="wind-turbines2.json",
+            wind_turbine_file="wind-turbines.json",
             wind_inputs_file="windpower-inputs.json",
             output_csv="sam_wind.csv",
         )

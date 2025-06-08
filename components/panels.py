@@ -45,37 +45,46 @@ def panel_confort():
 def panel_eolica():
     min_year = esolmet.index.year.min()# Calculamos maximos i minimos 
     max_year = esolmet.index.year.max()
-
+    min_date = str(esolmet.index.min().date())
+    max_date = str(esolmet.index.max().date())
     return ui.nav_panel(
         "Eólica",
         ui.navset_tab(
             ui.nav_panel(
                 "Rosas de Viento",
                 ui.h3(" "),
-
-                # Creamos una fila (ui.row) con dos columnas:
-                ui.row(
-                    ui.column(
-                        6,  # mitad del ancho de la fila
-                        ui.h4("Rosa diurna"),
-                        output_widget("wind_rose_day")
-                    ),
-                    ui.column(
-                        6,  # la otra mitad
-                        ui.h4("Rosa nocturna"),
-                        output_widget("wind_rose_night")
-                    ),
+                ui.input_date_range(
+                    "wind_period_range",
+                    "Selecciona periodo:",
+                    start=min_date, end=max_date,
+                    min=min_date,   max=max_date
                 ),
+          ui.row(
+            ui.column(
+              6,
+              ui.h4("Rosa diurna", style="text-align:center;"),
+              output_widget("wind_rose_day")
+            ),
+            ui.column(
+              6,
+              ui.h4("Rosa nocturna", style="text-align:center;"),
+              output_widget("wind_rose_night")
+            ),
+          ),
 
                 # Rosa por periodo
-                ui.h3(),
+                ui.h3("Rosas de viento promedio anual"),
                 ui.input_date_range(
                     "wind_date_range",
                     "Selecciona periodo:",
+                    start=min_date,  # fecha de inicio por defecto
+                    end=max_date,    # fecha de fin por defecto
+                    min=min_date,    # límite mínimo seleccionable
+                    max=max_date     # límite máximo seleccionable
                 ),
                 output_widget("wind_rose_speed_period"),
 
-                ui.h3("Rosas de viento anual y estacional"),
+                ui.h3("Rosa de viento promedio estacional"),
                 ui.input_slider(
                     "season_year_range",
                     "Selecciona rango de años:",
@@ -97,15 +106,20 @@ def panel_eolica():
             ui.nav_panel(
                 "Heatmaps velocidad",
                 ui.h3("Velocidad de viento anual y estacional"),
-
-                # Colocamos primero el heatmap anual
-                ui.div(
+                ui.input_date_range(
+                    "heatmap_speed_range",
+                    "Selecciona periodo:",
+                    start=min_date, end=max_date,
+                    min=min_date,   max=max_date
+                ),
+                ui.row(
+                    ui.column(
+                    12,
                     ui.h4("Heatmap anual"),
-                    output_widget("heatmap_wind_annual"),
-                    style="margin-bottom: 2rem;"
+                    output_widget("heatmap_wind_annual")
+                    )
                 ),
 
-                # Ahora cuatro columnas para cada estación
                 ui.row(
                     ui.column(6,
                         ui.h4("Primavera", style="text-align:center;"),
@@ -116,7 +130,6 @@ def panel_eolica():
                         output_widget("heatmap_wind_verano")
                     ),
                 ),
-                # Segunda fila: Otoño / Invierno
                 ui.row(
                     ui.column(6,
                         ui.h4("Otoño", style="text-align:center;"),
