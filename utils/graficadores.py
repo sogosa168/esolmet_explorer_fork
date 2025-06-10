@@ -25,12 +25,6 @@ def graficado_Is_matplotlib(fechas):
     df = df.pivot(index='fecha', columns='variable', values='valor')
     df = df.rename(columns=alias_map)
 
-    temp_col = alias_map.get("AirTC_Avg", "AirTC_Avg")
-    pres_col = alias_map.get("P",          "P")
-    hr_col   = alias_map.get("hr",         "hr")
-    ws_col   = alias_map.get("WS_ms_Avg",  "WS_ms_Avg")
-    wd_col   = alias_map.get("WindDir",    "WindDir")
-    Is_cols  = [col for col in df.columns if col.startswith("I")]
 
     fig = plt.figure()
     gs  = GridSpec(nrows=4, ncols=2,
@@ -44,25 +38,26 @@ def graficado_Is_matplotlib(fechas):
     ax_is   = fig.add_subplot(gs[3, 0], sharex=ax_te)
     ax_wind = fig.add_subplot(gs[:, 1], projection='windrose')
 
-    ax_te.plot(df.index, df[temp_col], label="Te", color="k", alpha=0.8)
+    ax_te.plot(df.index, df["tdb"], label="Te", color="k", alpha=0.8)
     ax_te.set_ylabel("Te [°C]")
     ax_te.legend(loc="upper left")
 
-    ax_p.plot(df[pres_col], label="P", alpha=0.8)
+    ax_p.plot(df["p_atm"], label="p", alpha=0.8)
     ax_p.set_ylabel("P [–]")
     ax_p.legend(loc="upper left")
 
-    ax_hr.plot(df[hr_col], label="HR", alpha=0.8)
+    ax_hr.plot(df["rh"], label="HR", alpha=0.8)
     ax_hr.set_ylim(0, 100)
     ax_hr.set_ylabel("HR [%]")
     ax_hr.legend(loc="upper left")
 
-    for I in Is_cols:
-        ax_is.plot(df.index, df[I], label=I)
+    for col in df.columns:
+        if col.startswith("dni") or col.startswith("ghi") or col.startswith("dhi"):
+            ax_is.plot(df.index, df[col], label=col)
     ax_is.set_ylabel("I [W/m²]")
     ax_is.legend(loc="upper left")
 
-    ax_wind.bar(df[wd_col], df[ws_col],
+    ax_wind.bar(df["wd"], df["ws"],
                 normed=True, opening=0.8,
                 edgecolor="white")
     ax_wind.set_title("Rosa de Vientos")

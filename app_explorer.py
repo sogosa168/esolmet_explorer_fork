@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 
 
 # importamos
-variables, latitude, longitude, gmt, name, alias, \
+variables, latitude, longitude, gmt, name, alias_map, \
     wind_speed_height, air_temperature_height, air_pressure_height, \
     site_id, data_tz = load_settings()
 conn = duckdb.connect(database="esolmet.db")
@@ -28,6 +28,7 @@ df_lect = conn.execute(
 
 # Pivotamos para obtener el DataFrame ancho índice = fecha, columnas = variable
 esolmet = df_lect.pivot(index="fecha", columns="variable", values="valor")
+esolmet = esolmet.rename(columns=alias_map)
 esolmet.index = pd.to_datetime(esolmet.index)
 esolmet = esolmet.sort_index()
 print(">>> Columnas en esolmet:", list(esolmet.columns))
@@ -69,7 +70,7 @@ def server(input, output, session):
         start_date, end_date = input.wind_date_range()
         return create_wind_rose_period_plotly(
             esolmet,
-            dir_col='WindDir',
+            dir_col='wd',
             start=start_date,
             end=end_date
         )
@@ -79,14 +80,13 @@ def server(input, output, session):
         start, end = input.wind_period_range()
         return create_wind_rose_by_speed_day(
             esolmet,
-            dir_col="WindDir",
-            speed_col="WS_ms_Avg",
+            dir_col="wd",
+            speed_col="ws",
             dir_bins=16,
             speed_bins=None,   
             start=start,
             end=end,
         )
-
 
     @render_widget
     def wind_rose_night():
@@ -94,8 +94,8 @@ def server(input, output, session):
         start, end = input.wind_period_range()
         return create_wind_rose_by_speed_night(
             esolmet,
-            dir_col="WindDir",
-            speed_col="WS_ms_Avg",
+            dir_col="wd",
+            speed_col="ws",
             dir_bins=16,
             speed_bins=None,
             start=start,
@@ -107,7 +107,7 @@ def server(input, output, session):
     def wind_rose_speed_period():
         start_date, end_date = input.wind_date_range()
         return create_wind_rose_by_speed_period(
-            esolmet, dir_col='WindDir', speed_col='WS_ms_Avg',
+            esolmet, dir_col='wd', speed_col='ws',
             start=start_date, end=end_date
         )
 
@@ -143,31 +143,31 @@ def server(input, output, session):
     @render_widget
     def heatmap_wind_annual():
         start, end = input.heatmap_speed_range()
-        return create_typical_wind_heatmap(esolmet, speed_col="WS_ms_Avg", start=start, end=end)
+        return create_typical_wind_heatmap(esolmet, speed_col="ws", start=start, end=end)
     @output
     @render_widget
     def heatmap_wind_primavera():
         start, end = input.heatmap_speed_range()
-        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Primavera"]
+        return create_seasonal_wind_heatmaps(esolmet, "ws", start=start, end=end)["Primavera"]
 
 
     @output
     @render_widget
     def heatmap_wind_verano():
         start, end = input.heatmap_speed_range()
-        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Verano"]
+        return create_seasonal_wind_heatmaps(esolmet, "ws", start=start, end=end)["Verano"]
 
     @output
     @render_widget
     def heatmap_wind_otono():
         start, end = input.heatmap_speed_range()
-        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Otoño"]
+        return create_seasonal_wind_heatmaps(esolmet, "ws", start=start, end=end)["Otoño"]
 
     @output
     @render_widget
     def heatmap_wind_invierno():
         start, end = input.heatmap_speed_range()
-        return create_seasonal_wind_heatmaps(esolmet, "WS_ms_Avg", start=start, end=end)["Invierno"]
+        return create_seasonal_wind_heatmaps(esolmet, "ws", start=start, end=end)["Invierno"]
 
 
     @reactive.Calc

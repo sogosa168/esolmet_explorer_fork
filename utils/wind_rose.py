@@ -10,8 +10,8 @@ import PySAM.Windpower as wp
 import json
 import calendar                     
 from plotly.subplots import make_subplots
-from plotly.subplots import make_subplots
-variables, latitude, longitude, gmt, name, alias, \
+from utils.config import load_settings
+variables, latitude, longitude, gmt, name, alias_map, \
     site_id, data_tz, wind_speed_height, air_temperature_height, air_pressure_height = load_settings()
 
 def create_wind_rose_period_plotly(
@@ -52,8 +52,8 @@ def create_wind_rose_period_plotly(
 
 def create_wind_rose_by_speed(
     df,
-    dir_col='WindDir',
-    speed_col='WS_ms_Avg',
+    dir_col='wd',
+    speed_col='ws',
     dir_bins=16,
     speed_bins=None,
     title='Rosa de vientos por velocidad'
@@ -111,8 +111,8 @@ def create_wind_rose_by_speed(
 
 def create_wind_rose_by_speed_period( #ESTA SI 
     df,
-    dir_col='WindDir',
-    speed_col='WS_ms_Avg',
+    dir_col='wd',
+    speed_col='ws',
     start=None,
     end=None,
     dir_bins=16,
@@ -215,8 +215,8 @@ def create_seasonal_wind_roses_plotly(
 
 def create_seasonal_wind_roses_by_speed_plotly(#ESTA SI 
     df,
-    dir_col='WindDir',
-    speed_col='WS_ms_Avg',
+    dir_col='wd',
+    speed_col='ws',
     dir_bins=16,
     speed_bins=None
 ):
@@ -227,7 +227,7 @@ def create_seasonal_wind_roses_by_speed_plotly(#ESTA SI
     Parámetros:
     - df: DataFrame con DatetimeIndex y columnas de dirección y velocidad.
     - dir_col: columna de dirección (grados).
-    - speed_col: columna de velocidad (WS_ms_Avg).
+    - speed_col: columna de velocidad (ws).
     - dir_bins: número de sectores direccionales.
     """
     if not isinstance(df.index, pd.DatetimeIndex):
@@ -266,7 +266,7 @@ def create_seasonal_wind_roses_by_speed_plotly(#ESTA SI
 
 def create_typical_wind_heatmap(
     df,
-    speed_col="WS_ms_Avg",
+    speed_col="ws",
     start: str | None = None,
     end:   str | None = None,
 ):
@@ -400,7 +400,7 @@ def create_typical_wind_heatmap(
 
 def create_seasonal_wind_heatmaps(
     df,
-    speed_col: str = "WS_ms_Avg",
+    speed_col: str = "ws",
     start: str | None = None,
     end:   str | None = None,
 ):
@@ -513,21 +513,21 @@ def make_sam_wind_csv(
     ) = load_settings(ini_path)
 
 
-    needed_cols = ["WS_ms_Avg", "WindDir", "AirTC_Avg", "CS106_PB_Avg"]
+    needed_cols = ["ws", "wd", "tdb", "p_atm"]
     df2 = esolmet[needed_cols].copy()
 
-    df2["WS_ms_Avg"]    = pd.to_numeric(df2["WS_ms_Avg"], errors="coerce")
-    df2["WindDir"]      = pd.to_numeric(df2["WindDir"],   errors="coerce")
-    df2["AirTC_Avg"]    = pd.to_numeric(df2["AirTC_Avg"], errors="coerce")
-    df2["CS106_PB_Avg"] = pd.to_numeric(df2["CS106_PB_Avg"], errors="coerce")
+    df2["ws"]    = pd.to_numeric(df2["ws"], errors="coerce")
+    df2["wd"]      = pd.to_numeric(df2["wd"],   errors="coerce")
+    df2["tdb"]    = pd.to_numeric(df2["tdb"], errors="coerce")
+    df2["p_atm"] = pd.to_numeric(df2["p_atm"], errors="coerce")
 
     df_hourly = df2.resample("1h").agg({
-        "WS_ms_Avg":    ["mean", "std"],
-        "WindDir":      "mean",
-        "AirTC_Avg":    "mean",
-        "CS106_PB_Avg": "mean",
+        "ws":    ["mean", "std"],
+        "wd":      "mean",
+        "tdb":    "mean",
+        "p_atm": "mean",
     })
-    df_hourly.columns = ["WS_mean", "WS_std", "WindDir", "Temperature", "Pressure_mbar"]
+    df_hourly.columns = ["ws", "ws_std", "wd", "tdb", "p_atm"]
     df_hourly = df_hourly.ffill()
 
     df_hourly.index.name = "fecha"
@@ -535,15 +535,15 @@ def make_sam_wind_csv(
     df_hourly = df_hourly[~((df_hourly.index.month == 2) & (df_hourly.index.day == 29))]
     df_hourly = df_hourly.ffill()
 
-    df_hourly["Pressure_mbar"] = df_hourly["Pressure_mbar"] * 100
+    df_hourly["p_atm"] = df_hourly["p_atm"] * 100
 
     df_hourly = df_hourly.reset_index()
 
     df_hourly = df_hourly.rename(columns={
-        "WS_mean":       "wind_speed",
-        "WindDir":       "wind_direction",
-        "Temperature":   "temperature",
-        "Pressure_mbar": "pressure"
+        "ws":       "wind_speed",
+        "wd":       "wind_direction",
+        "tdb":   "temperature",
+        "p_atm": "pressure"
     })
 
     df_hourly["Month"] = df_hourly["fecha"].dt.month
@@ -932,8 +932,8 @@ def _build_rose(#ESTA SI
 
 def create_wind_rose_by_speed_day(
     df,
-    dir_col="WindDir",
-    speed_col="WS_ms_Avg",
+    dir_col="wd",
+    speed_col="ws",
     *,                     # fuerza que todo lo que venga a partir de aquí sea keyword-only
     start: str | None = None,
     end:   str | None = None,
@@ -970,8 +970,8 @@ def create_wind_rose_by_speed_day(
 
 def create_wind_rose_by_speed_night(
     df,
-    dir_col="WindDir",
-    speed_col="WS_ms_Avg",
+    dir_col="wd",
+    speed_col="ws",
     *,
     start: str | None = None,
     end:   str | None = None,
