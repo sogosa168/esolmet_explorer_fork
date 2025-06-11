@@ -21,13 +21,6 @@ if os.path.exists(db_path):
         has_db = False
 else:
     has_db = False
-#conn = duckdb.connect(database="esolmet.db")
-#df_lect = conn.execute(
-#    "SELECT fecha, variable, valor FROM lecturas"
-#).df()
-#esolmet = df_lect.pivot(index="fecha", columns="variable", values="valor")
-#esolmet.index = pd.to_datetime(esolmet.index)
-#esolmet = esolmet.sort_index()
 
 
 
