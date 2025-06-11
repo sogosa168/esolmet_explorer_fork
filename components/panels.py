@@ -4,16 +4,30 @@ import faicons as fa
 from utils.data_processing import load_esolmet_data
 import pandas as pd
 import duckdb
-
-conn = duckdb.connect(database="esolmet.db")
-
-df_lect = conn.execute(
-    "SELECT fecha, variable, valor FROM lecturas"
-).df()
-
-esolmet = df_lect.pivot(index="fecha", columns="variable", values="valor")
-esolmet.index = pd.to_datetime(esolmet.index)
-esolmet = esolmet.sort_index()
+import os
+import duckdb
+db_path = "esolmet.db"
+if os.path.exists(db_path):
+    try:
+        conn = duckdb.connect(database=db_path)
+        df_lect = conn.execute(
+            "SELECT fecha, variable, valor FROM lecturas"
+        ).df()
+        esolmet = df_lect.pivot(index="fecha", columns="variable", values="valor")
+        esolmet.index = pd.to_datetime(esolmet.index)
+        esolmet = esolmet.sort_index()
+        has_db = True
+    except Exception:
+        has_db = False
+else:
+    has_db = False
+#conn = duckdb.connect(database="esolmet.db")
+#df_lect = conn.execute(
+#    "SELECT fecha, variable, valor FROM lecturas"
+#).df()
+#esolmet = df_lect.pivot(index="fecha", columns="variable", values="valor")
+#esolmet.index = pd.to_datetime(esolmet.index)
+#esolmet = esolmet.sort_index()
 
 
 

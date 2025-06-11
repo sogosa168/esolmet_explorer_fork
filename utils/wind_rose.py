@@ -91,7 +91,7 @@ def create_wind_rose_by_speed(
     deg_bins = np.linspace(0, 360, dir_bins+1)
     deg_labels = [(deg_bins[i] + deg_bins[i+1]) / 2 for i in range(dir_bins)]
     df2['Direccion'] = pd.cut(df2[dir_col] % 360, bins=deg_bins, labels=deg_labels, right=False)
-    df_counts = df2.groupby(['Direccion', 'Velocidad']).size().reset_index(name='count')
+    df_counts = df2.groupby(['Direccion', 'Velocidad'],observed=True).size().reset_index(name='count')
     total = df_counts['count'].sum()
     df_counts['Frecuencia'] = df_counts['count'] / total * 100
     fig = px.bar_polar(
@@ -330,11 +330,11 @@ def create_typical_wind_heatmap(
         specs=[[{"type":"scatter"}, None],
                [{"type":"heatmap"},{"type":"scatter"}]],
         row_heights=[0.2,0.8],
-        column_widths=[0.8,0.2],
+        column_widths=[0.9,0.1],
         shared_xaxes=True,
         shared_yaxes=True,
-        vertical_spacing=0.02,
-        horizontal_spacing=0.02,
+        vertical_spacing=0.001,
+        horizontal_spacing=0.001,
     )
 
     fig.add_trace(
@@ -355,7 +355,16 @@ def create_typical_wind_heatmap(
             x=list(pivot.columns),
             y=list(pivot.index),
             colorscale="Viridis",
-            colorbar=dict(title="m/s"),
+            colorbar=dict(
+                title="Velocidad (m/s)",    # texto del título
+                titleside="right",          # lo coloca al lado derecho
+                len=0.8,                    # ocupa el 70% de la altura del subplot
+                thickness=20,               # 15px de grosor
+                x=1,                     # lo saca un poco fuera del plotting area
+                y=0.4,                      # centro verticalmente
+                titlefont=dict(size=12),    # tamaño de la fuente
+                ticklen=3,                  # largo de las marcas
+            ),
             hovertemplate="Día: %{x|%b %d}<br>Hora: %{y}:00<br>Vel: %{z:.2f}<extra></extra>"
         ),
         row=2, col=1
@@ -391,6 +400,14 @@ def create_typical_wind_heatmap(
         tickmode="array",
         tickvals=list(range(0,24,2)),
         title_text="Hora del día"
+    )
+    fig.update_yaxes(
+        title_text="Velocidad (m/s)", 
+        row=1, col=1
+    )
+    fig.update_xaxes(
+        title_text="Velocidad (m/s)",
+        row=2, col=2
     )
     fig.update_yaxes(matches="y2", row=2, col=2)
 
@@ -491,7 +508,7 @@ def create_seasonal_wind_heatmaps(
 def make_sam_wind_csv(
     esolmet: pd.DataFrame,
     ini_path: str = "configuration.ini",
-    output_csv: str = "sam_wind.csv"
+    output_csv: str = "wind_simulation/sam_wind.csv"
 ) -> Path:
     """
     Genera un CSV TMY (8760 h) compatible con PySAM usando la configuración
@@ -596,9 +613,9 @@ def run_wind_simulation(  #ESTA SI
     esolmet_df,
     turbine_name: str,
     ini_path: str = "configuration.ini",
-    wind_turbine_file: str = "wind-turbines.json",
-    wind_inputs_file: str = "windpower-inputs.json",
-    output_csv: str = "sam_wind.csv",
+    wind_turbine_file: str = "wind_simulation/wind-turbines.json",
+    wind_inputs_file: str = "wind_simulation/windpower-inputs.json",
+    output_csv: str = "wind_simulation/sam_wind.csv",
 ) -> dict:
     """
     Crea el CSV TMY (vía make_sam_wind_csv), carga PySAM.Windpower,
@@ -730,7 +747,7 @@ def create_seasonal_generation_figures(gen_array): #ESTA SI
     un “mes típico” de 28–31 días.
     """
 
-    index = pd.date_range("2001-01-01 00:00", periods=len(gen_array), freq="H")
+    index = pd.date_range("2001-01-01 00:00", periods=len(gen_array), freq="h")
     df = pd.DataFrame({"gen": gen_array}, index=index)
 
     season_months = {

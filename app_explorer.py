@@ -183,9 +183,9 @@ def server(input, output, session):
             esolmet_df=esolmet,
             turbine_name=modelo,
             ini_path="configuration.ini",
-            wind_turbine_file="wind-turbines.json",
-            wind_inputs_file="windpower-inputs.json",
-            output_csv="sam_wind.csv",
+            wind_turbine_file="wind_simulation/wind-turbines.json",
+            wind_inputs_file="wind_simulation/windpower-inputs.json",
+            output_csv="wind_simulation/sam_wind.csv",
         )
 
     @output
