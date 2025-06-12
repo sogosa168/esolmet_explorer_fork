@@ -357,12 +357,15 @@ def create_typical_wind_heatmap(
             colorscale="Viridis",
             colorbar=dict(
                 title="Velocidad (m/s)",    # texto del título
-                titleside="right",          # lo coloca al lado derecho
-                len=0.8,                    # ocupa el 70% de la altura del subplot
+                titleside="bottom",  
+                orientation='h',        # lo coloca al lado derecho
+                len=0.6,                    # ocupa el 70% de la altura del subplot
                 thickness=20,               # 15px de grosor
-                x=1,                     # lo saca un poco fuera del plotting area
-                y=0.4,                      # centro verticalmente
-                titlefont=dict(size=12),    # tamaño de la fuente
+                x=0.45,                     # lo saca un poco fuera del plotting area
+                xanchor="center",            # lo ancla al lado izquierdo
+                y=-0.1,    
+                yanchor='top',                 # centro verticalmente
+                titlefont=dict(size=14),    # tamaño de la fuente
                 ticklen=3,                  # largo de las marcas
             ),
             hovertemplate="Día: %{x|%b %d}<br>Hora: %{y}:00<br>Vel: %{z:.2f}<extra></extra>"
@@ -788,13 +791,14 @@ def create_seasonal_generation_figures(gen_array): #ESTA SI
         )
 
         fig = go.Figure(
-            data=[
-                go.Scatter(
-                    x=daily["Día"].astype(int).astype(str),
-                    y=daily["energy_kWh"], mode='lines',
-                    line=dict(color="steelblue", width=2),        
-                    name=season,
-                )
+                    data=[
+                        go.Bar(
+                            x=daily["Día"].astype(int).astype(str),
+                            y=daily["energy_kWh"],
+                            name=season,
+                            marker_color="steelblue",
+                            hovertemplate="Día: %{x}<br>Energía: %{y:.0f} kWh<extra></extra>"
+                        )
             ]
         )
         fig.update_layout(
