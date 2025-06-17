@@ -281,22 +281,50 @@ def create_typical_wind_heatmap(
     df2["Month"] = df2.index.month
     df2["Day"]   = df2.index.day
     df2["Hour"]  = df2.index.hour
-
+# 1) Promedio diario típico
     daily = (
         df2
         .groupby(["Month", "Day"])[speed_col]
         .mean()
         .reset_index()
     )
-    daily = daily[~((daily["Month"] == 2) & (daily["Day"] == 29))]
+    # 2) Desviación estándar diaria
+    daily_std = (
+        df2
+        .groupby(["Month", "Day"])[speed_col]
+        .std()
+        .reset_index()
+    )
 
-    daily["Date2001"] = pd.to_datetime(dict(
-        year=2001,
-        month=daily["Month"],
-        day=daily["Day"]
-    ))
-    daily = daily.sort_values("Date2001")
-    daily_avg = daily.set_index("Date2001")[speed_col]
+    # 3) Filtrar 29-Feb en ambos
+    mask_feb29 = (daily["Month"] == 2) & (daily["Day"] == 29)
+    daily    = daily[~mask_feb29]
+    daily_std = daily_std[~mask_feb29]
+
+    # 4) Crear columna Date2001 en ambos
+    daily["Date2001"] = pd.to_datetime({
+        "year":  2001,
+        "month": daily["Month"],
+        "day":   daily["Day"]
+    })
+    daily_std["Date2001"] = pd.to_datetime({
+        "year":  2001,
+        "month": daily_std["Month"],
+        "day":   daily_std["Day"]
+    })
+
+    # 5) Ordenar por esa fecha y extraer la Serie
+    daily_avg = (
+        daily
+        .sort_values("Date2001")
+        .set_index("Date2001")[speed_col]
+    )
+    daily_std = (
+        daily_std
+        .sort_values("Date2001")
+        .set_index("Date2001")[speed_col]
+    )
+
 
     hourly = (
         df2
@@ -305,6 +333,7 @@ def create_typical_wind_heatmap(
         .reset_index()
     )
     hourly_avg = hourly.set_index("Hour")[speed_col]
+    hourly_std = df2.groupby(df2.index.hour)[speed_col].std()
 
     grp = (
         df2
@@ -335,6 +364,35 @@ def create_typical_wind_heatmap(
         shared_yaxes=True,
         vertical_spacing=0.001,
         horizontal_spacing=0.001,
+    )
+    # Banda superior (+1σ) – sin línea, solo hover y leyenda
+    fig.add_trace(
+        go.Scatter(
+            x=daily_avg.index,
+            y=daily_avg + daily_std,
+            mode="lines",
+            line=dict(width=0),
+            name="+1σ",
+            hoverinfo="y",
+            hovertemplate="+1σ: %{y:.2f} m/s<extra></extra>"
+        ),
+        row=1, col=1
+    )
+
+    # Banda inferior (–1σ), rellena desde la traza anterior
+    fig.add_trace(
+        go.Scatter(
+            x=daily_avg.index,
+            y=daily_avg - daily_std,
+            mode="lines",
+            fill="tonexty",
+            fillcolor="rgba(0,100,200,0.2)",
+            line=dict(width=0),
+            name="-1σ",
+            hoverinfo="y",
+            hovertemplate="-1σ: %{y:.2f} m/s<extra></extra>"
+        ),
+        row=1, col=1
     )
 
     fig.add_trace(
@@ -372,6 +430,63 @@ def create_typical_wind_heatmap(
         ),
         row=2, col=1
     )
+    
+    fig.add_trace(
+    go.Heatmap(
+        z=pivot.values,
+        x=list(pivot.columns),
+        y=list(pivot.index),
+        colorscale="Viridis",
+        coloraxis="coloraxis",          # <— aquí le decimos que use el coloraxis “coloraxis”
+        hovertemplate="Día: %{x|%b %d}<br>Hora: %{y}:00<br>Vel: %{z:.2f}<extra></extra>"
+    ),
+        row=2, col=1
+    )
+
+    # 2) en el layout:
+    fig.update_layout(
+    coloraxis_colorbar_title="Velocidad (m/s)",
+    coloraxis_colorbar_title_side="bottom",
+    coloraxis_colorbar_orientation="h",
+    coloraxis_colorbar_len=0.6,
+    coloraxis_colorbar_thickness=20,
+    coloraxis_colorbar_x=0.45,
+    coloraxis_colorbar_xanchor="center",
+    coloraxis_colorbar_y=-0.1,
+    coloraxis_colorbar_yanchor="top",
+    coloraxis_colorbar_ticklen=3,
+    plot_bgcolor="white",   # fondo de la zona de datos
+    paper_bgcolor="white",  # fondo de todo el lienzo
+    )
+    # Banda superior horaria (+1σ)
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg + hourly_std,
+            y=hourly_avg.index,
+            mode="lines",
+            line=dict(width=0),
+            name="+1σ",
+            hoverinfo="x",
+            hovertemplate="+1σ: %{x:.2f} m/s<extra></extra>"
+        ),
+        row=2, col=2
+    )
+
+    # Banda inferior horaria (–1σ)
+    fig.add_trace(
+        go.Scatter(
+            x=hourly_avg - hourly_std,
+            y=hourly_avg.index,
+            mode="lines",
+            fill="tonextx",
+            fillcolor="rgba(0,100,200,0.2)",
+            line=dict(width=0),
+            name="-1σ",
+            hoverinfo="x",
+            hovertemplate="-1σ: %{x:.2f} m/s<extra></extra>"
+        ),
+        row=2, col=2
+    )
 
     fig.add_trace(
         go.Scatter(
@@ -395,24 +510,35 @@ def create_typical_wind_heatmap(
         row=2, col=1,
         type="date",
         tickformat="%b %d",
-        title_text="Día del año"
+        title_text="Día del año",
     )
 
     fig.update_yaxes(
         row=2, col=1,
         tickmode="array",
         tickvals=list(range(0,24,2)),
-        title_text="Hora del día"
+        title_text="Hora del día",
+        
+    )
+    fig.update_xaxes(
+        row=1, col=1,
+        showgrid=True,
+        gridcolor="lightgrey"
     )
     fig.update_yaxes(
         title_text="Velocidad (m/s)", 
-        row=1, col=1
+        row=1, col=1,
+        showgrid=True, gridcolor="lightgrey",
     )
     fig.update_xaxes(
         title_text="Velocidad (m/s)",
-        row=2, col=2
+        row=2, col=2,
+        showgrid=True, gridcolor="lightgrey",
     )
-    fig.update_yaxes(matches="y2", row=2, col=2)
+    fig.update_yaxes(
+        matches="y2", row=2, col=2,   
+        showgrid=True,
+        gridcolor="lightgrey")
 
     return fig
 
@@ -424,13 +550,10 @@ def create_seasonal_wind_heatmaps(
     end:   str | None = None,
 ):
     """
-    Genera un heatmap de velocidad de viento para cada estación:
-      · Primavera: meses [3, 4, 5] → mínimo de días: 30 (abril)
-      · Verano:    meses [6, 7, 8] → mínimo de días: 30 (junio)
-      · Otoño:     meses [9, 10, 11] → mínimo de días: 30 (septiembre)
-      · Invierno:  meses [12, 1, 2] → mínimo de días: 28 (febrero, no bisiesto)
-    start, end: filtros de fecha "YYYY-MM-DD" (inclusivos).
-    Devuelve un dict de Plotly.Figure con claves "Primavera", "Verano", "Otoño", "Invierno".
+    Igual que antes, pero cada estación sale con:
+      • Serie diaria típica arriba
+      • Heatmap estacional abajo-izquierda (colorbar horizontal debajo)
+      • Serie horaria típica abajo-derecha
     """
     df2 = df.copy()
     if not isinstance(df2.index, pd.DatetimeIndex):
@@ -465,46 +588,194 @@ def create_seasonal_wind_heatmaps(
             figs[season] = fig
             continue
 
-        grouped = (
+        daily = (
             df_season
-            .groupby(["Month", "Day", "Hour"])[speed_col]
+            .groupby(["Month","Day"])[speed_col]
             .mean()
             .reset_index()
         )
-        grouped = grouped[~((grouped["Month"] == 2) & (grouped["Day"] == 29))]
+        daily = daily[~((daily["Month"]==2)&(daily["Day"]==29))]
+        daily["Date2001"] = pd.to_datetime(dict(
+            year=2001,
+            month=daily["Month"],
+            day=daily["Day"]
+        ))
+        daily = daily.sort_values("Date2001")
+        daily_avg = daily.set_index("Date2001")[speed_col]
+        
+        hourly_avg = (
+            df_season
+            .groupby("Hour")[speed_col]
+            .mean()
+        )
+        daily_std = (
+        df_season
+        .groupby(["Month","Day"])[speed_col]
+        .std()
+        .reset_index()
+    )
+        daily_std = daily_std[~((daily_std["Month"]==2)&(daily_std["Day"]==29))]
+        daily_std["Date2001"] = pd.to_datetime(dict(
+            year=2001,
+            month=daily_std["Month"],
+            day=daily_std["Day"]
+        ))
+        daily_std = (
+            daily_std
+            .sort_values("Date2001")
+            .set_index("Date2001")[speed_col]
+        )
 
-        days_per_month = [calendar.monthrange(2001, m)[1] for m in meses]
+        hourly_std = df_season.groupby("Hour")[speed_col].std()
+
+        grouped = (
+            df_season
+            .groupby(["Month","Day","Hour"])[speed_col]
+            .mean()
+            .reset_index()
+        )
+        grouped = grouped[~((grouped["Month"]==2)&(grouped["Day"]==29))]
+        days_per_month = [calendar.monthrange(2001,m)[1] for m in meses]
         min_days = min(days_per_month)
-
         grouped = grouped[grouped["Day"] <= min_days]
 
         pivot = (
             grouped
-            .groupby(["Day", "Hour"])[speed_col]
+            .groupby(["Day","Hour"])[speed_col]
             .mean()
             .reset_index()
             .pivot(index="Hour", columns="Day", values=speed_col)
             .fillna(0.0)
         )
 
-        fig = go.Figure(
-            go.Heatmap(
-                z=pivot.values,
-                x=pivot.columns.astype(str),
-                y=pivot.index,
-                colorscale="Viridis",
-                colorbar=dict(title="m/s"),
-                hovertemplate="Día %{x}<br>Hora: %{y}:00<br>Vel: %{z:.2f} m/s<extra></extra>"
-            )
+        fig = make_subplots(
+            rows=2, cols=2,
+            specs=[[{"type":"scatter"}, None],
+                   [{"type":"heatmap"},{"type":"scatter"}]],
+            row_heights=[0.2, 0.8],
+            column_widths=[0.8, 0.2],
+            shared_xaxes=True, shared_yaxes=True,
+            vertical_spacing=0.02, horizontal_spacing=0.02,
         )
-        fig.update_layout(
-            xaxis=dict(title="Día del mes típico", showgrid=False),
-            yaxis=dict(title="Hora del día", tickmode="array",
-                       tickvals=list(range(0,24,2)), showgrid=False),
-            margin=dict(t=20,b=30,l=60,r=20),
-            title_text=None,
+        fig.add_trace(
+            go.Scatter(
+                x=daily_avg.index,
+                y=(daily_avg + daily_std).values,
+                mode="lines",
+                line=dict(width=0),
+                name="+1σ",
+                hoverinfo="y",
+                hovertemplate="+1σ: %{y:.2f} m/s<extra></extra>"
+            ),
+            row=1, col=1
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=daily_avg.index,
+                y=(daily_avg - daily_std).values,
+                mode="lines",
+                fill="tonexty",
+                fillcolor="rgba(0,100,200,0.2)",  
+                line=dict(width=0),
+                name="-1σ",
+                hoverinfo="y",
+                hovertemplate="-1σ: %{y:.2f} m/s<extra></extra>"
+            ),
+            row=1, col=1
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=daily_avg.index,
+                y=daily_avg.values,
+                mode="lines",
+                name="Promedio diario",
+                hovertemplate="Día: %{x|%b %d}<br>Vel: %{y:.2f} m/s<extra></extra>"
+            ),
+            row=1, col=1
         )
 
+        fig.add_trace(
+            go.Heatmap(
+                z=pivot.values,
+                x=pivot.columns,
+                y=pivot.index,
+                colorscale="Viridis",
+                coloraxis="coloraxis",   
+                hovertemplate="Día: %{x}<br>Hora: %{y}:00<br>Vel: %{z:.2f} m/s<extra></extra>"
+            ),
+            row=2, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=(hourly_avg + hourly_std).values,
+                y=hourly_avg.index,
+                mode="lines",
+                line=dict(width=0),
+                name="+1σ",
+                hoverinfo="x",
+                hovertemplate="+1σ: %{x:.2f} m/s<extra></extra>"
+            ),
+            row=2, col=2
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=(hourly_avg - hourly_std).values,
+                y=hourly_avg.index,
+                mode="lines",
+                fill="tonextx",
+                fillcolor="rgba(0,100,200,0.2)",  # mismo color+alpha
+                line=dict(width=0),
+                name="-1σ",
+                hoverinfo="x",
+                hovertemplate="-1σ: %{x:.2f} m/s<extra></extra>"
+            ),
+            row=2, col=2
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=hourly_avg.values,
+                y=hourly_avg.index,
+                mode="lines",
+                orientation="h",
+                name="Promedio horario",
+                hovertemplate="Hora: %{y}:00<br>Vel: %{x:.2f} m/s<extra></extra>"
+            ),
+            row=2, col=2
+        )
+
+        fig.update_layout(
+            height=550,
+            margin=dict(t=30,b=40,l=60,r=20),
+            showlegend=False,
+            title_text=f"Heatmap estacional de velocidad — {season}",
+
+            # Configuramos el coloraxis para la colorbar
+            coloraxis=dict(
+                colorbar=dict(
+                    title="m/s",
+                    orientation="h",
+                    y=-0.15,          # ligeramente debajo del subplot
+                    x=0.5,            # centrada
+                    xanchor="center",
+                    len=0.6,
+                    thickness=15,
+                    ticklen=3,
+                    title_side="bottom",
+                    title_font=dict(size=12),
+                )
+            )
+        )
+
+        # 6) Ejes
+        fig.update_xaxes(row=2, col=1, title_text="Día típico", tickmode="array",
+                         tickvals=list(pivot.columns)[::5])  # etiqueta cada 5 días
+        fig.update_yaxes(row=2, col=1, title_text="Hora del día",
+                         tickmode="array", tickvals=list(range(0,24,2)))
+        fig.update_xaxes(row=1, col=1, showgrid=True, gridcolor="lightgrey")
+        fig.update_yaxes(row=1, col=1, showgrid=True, gridcolor="lightgrey")
+        fig.update_xaxes(row=2, col=2, showgrid=True, gridcolor="lightgrey")
+        fig.update_yaxes(row=2, col=2, showgrid=True, gridcolor="lightgrey")
         figs[season] = fig
 
     return figs
@@ -862,7 +1133,7 @@ def create_generation_heatmap(gen_array):
             title="Día",
             tickmode="array",
             tickvals=[x_labels[i] for i in range(0, len(x_labels), 20)],
-            tickangle=45,
+            tickangle=0,
         ),
         yaxis=dict(
             title="Hora",
