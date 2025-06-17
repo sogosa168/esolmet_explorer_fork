@@ -7,11 +7,14 @@ from matplotlib.gridspec import GridSpec
 con = duckdb.connect("esolmet.db")
 
 
-def graficado_Is_matplotlib(fechas, alias_dict=None):
+# Desestructuramos 
+variables, latitude, longitude, gmt, name, alias_map, \
+    site_id, data_tz, wind_speed_height, air_temperature_height, air_pressure_height \
+    = load_settings()
 
-    # 1) No es necesario usar alias; las columnas ya tienen nombres universales
+con = duckdb.connect('esolmet.db')
 
-    # 2) Carga y pivoteo
+def graficado_Is_matplotlib(fechas):
     query = f"""
     SELECT *
       FROM lecturas
@@ -20,69 +23,45 @@ def graficado_Is_matplotlib(fechas, alias_dict=None):
      ORDER BY fecha
     """
     df = con.execute(query).fetchdf()
-    df = df.pivot(index="fecha", columns="variable", values="valor")
+    df = df.pivot(index='fecha', columns='variable', values='valor')
+    df = df.rename(columns=alias_map)
 
-    # 3) Figure + GridSpec
+
     fig = plt.figure()
-    # fig.set_constrained_layout(True)
+    gs  = GridSpec(nrows=4, ncols=2,
+                   width_ratios=[4, 1],
+                   height_ratios=[1, 1, 1, 1],
+                   figure=fig)
 
-    gs = GridSpec(
-        nrows=4,
-        ncols=2,
-        width_ratios=[4, 1],
-        height_ratios=[1, 1, 1, 1],
-        #    wspace=0.1, hspace=0.1,
-        figure=fig,
-    )
+    ax_te   = fig.add_subplot(gs[0, 0])
+    ax_hr   = fig.add_subplot(gs[1, 0], sharex=ax_te)
+    ax_p    = fig.add_subplot(gs[2, 0], sharex=ax_te)
+    ax_is   = fig.add_subplot(gs[3, 0], sharex=ax_te)
+    ax_wind = fig.add_subplot(gs[:, 1], projection='windrose')
 
-    ax_tdb = fig.add_subplot(gs[0, 0])
-    ax_rh = fig.add_subplot(gs[1, 0], sharex=ax_tdb)
-    ax_p = fig.add_subplot(gs[2, 0], sharex=ax_tdb)
-    ax_i = fig.add_subplot(gs[3, 0], sharex=ax_tdb)
-    ax_wind = fig.add_subplot(gs[:, 1], projection="windrose")
+    ax_te.plot(df.index, df["tdb"], label="Te", color="k", alpha=0.8)
+    ax_te.set_ylabel("Te [°C]")
+    ax_te.legend(loc="upper left")
 
-
-    # Graficar temperatura
-    ax_tdb.plot(df.index, df.tdb, label="tdb", c="k", alpha=0.8)
-    ax_tdb.set_ylabel("Temperatura [°C]")
-    ax_tdb.legend(loc="upper left")
-
-    # Graficar presión
-    ax_p.plot(df.p_atm, label="p_atm", alpha=0.8)
-    ax_p.set_ylabel("Presión [Pa]")
+    ax_p.plot(df["p_atm"], label="p", alpha=0.8)
+    ax_p.set_ylabel("P [–]")
     ax_p.legend(loc="upper left")
 
-    # Graficar Is
-    ax_i.plot(df.index, df.ghi, label="ghi")
-    ax_i.plot(df.index, df.dni, label="dni")
-    ax_i.plot(df.index, df.dhi, label="dhi")
-    ax_i.set_ylabel("Irradiancia [W/m2]")
-    ax_i.legend(loc="upper left")
+    ax_hr.plot(df["rh"], label="HR", alpha=0.8)
+    ax_hr.set_ylim(0, 100)
+    ax_hr.set_ylabel("HR [%]")
+    ax_hr.legend(loc="upper left")
 
-    # Graficar humedad relativa hr
-    ax_rh.plot(df.rh, label="rh")
-    ax_rh.set_ylim(0, 100)
-    ax_rh.set_ylabel("HR [%]")
-    ax_rh.legend()
+    for col in df.columns:
+        if col.startswith("dni") or col.startswith("ghi") or col.startswith("dhi"):
+            ax_is.plot(df.index, df[col], label=col)
+    ax_is.set_ylabel("I [W/m²]")
+    ax_is.legend(loc="upper left")
 
-    # 5) Rosa de vientos
-    ax_wind.bar(df.wd, df.ws, normed=True, opening=0.8, edgecolor="white")
+    ax_wind.bar(df["wd"], df["ws"],
+                normed=True, opening=0.8,
+                edgecolor="white")
     ax_wind.set_title("Rosa de Vientos")
 
-    # 6) Formato de fecha en eje X
     fig.autofmt_xdate()
-
-    return fig
-
-
-def graficado_Todo_matplotlib():
-
-    fig, ax = plt.subplots()
-    columnas = esolmet.columns
-    for columna in columnas:
-        ax.plot(esolmet[columna], label=columna)
-    # ax.set_ylabel("Irradiancia [W/m2]")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(alpha=0.2)
-    ax.legend()
     return fig

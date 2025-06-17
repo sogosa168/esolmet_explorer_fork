@@ -5,11 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
-
+requirments.txt
 # Virtual environments
-.venv
-
+venv/
+sam_wind.csv
 data/esolmet.db
 data/
-
+esolmet.db
 *.db
