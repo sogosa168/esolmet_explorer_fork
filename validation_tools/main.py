@@ -156,9 +156,9 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
     # 4) calcular posición solar
     solpos = loc.get_solarposition(times=df.index, method="nrel_numpy")
     df["solar_altitude"] = solpos["apparent_elevation"].values
-
     # 5) detectar columnas de radiación
-    rad_cols = [c for c in vars_list if c in df.columns]
+    rad_cols = [c for c in ["dni", "ghi", "dhi", "uv"] if c in df.columns]
+
     if not rad_cols:
         raise KeyError("No se encontraron columnas de radiación")
 
@@ -168,8 +168,7 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
     df["radiation"] = ~(night & has_rad)
 
     return df
-
-
+   
 def compare(path, extension):
     """
     Reads all files with a specific extension in the given directory,

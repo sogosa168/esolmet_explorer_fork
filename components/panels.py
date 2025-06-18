@@ -152,38 +152,48 @@ def panel_eolica():
                         # NUEVA SUB-PESTAÑA
             ui.nav_panel(
                 "Energía eólica",
-                ui.h3("Generación de energía eólica"),
+                ui.h3("Generación de energía eólica", class_="mb-4"),
                 ui.row(
                     ui.column(4,
+                        ui.div(
+                            ui.input_select("turbine_model",
+                                "Selecciona modelo de turbina:",
 
-                        ui.input_select("turbine_model",
-                            "Selecciona modelo de turbina:",
-
-                            choices=[
-                                "GE 1.5MWsle",
-                                "Nordex S77 1.5MW",
-                                "Fuhrlander FL 1.5MW",
-                                "BergeyExcel 8.9kW-7 (Distributed)",
-                                "NREL2019COE 100kW-27.6(Distributed)",
-                                "VestasV29 225kW-29(Distributed)",
-                                "NREL2019COE 20kW-12.4(Distributed)",
-                                "NREL2017COE 2.3MW-113",
-                                "VestasV47 660kW-47",
-                                "Ampair600 0.73kW-1.7"
-                            ]
+                                choices=[
+                                    "GE 1.5MWsle",
+                                    "Nordex S77 1.5MW",
+                                    "Fuhrlander FL 1.5MW",
+                                    "BergeyExcel 8.9kW-7 (Distributed)",
+                                    "NREL2019COE 100kW-27.6(Distributed)",
+                                    "VestasV29 225kW-29(Distributed)",
+                                    "NREL2019COE 20kW-12.4(Distributed)",
+                                    "VestasV47 660kW-47",
+                                    "Ampair600 0.73kW-1.7"
+                                ]
+                            ),
+                            class_="mb-3"
                         ),
-                        ui.input_action_button("run_sim", "Ejecutar simulación"),
-                        # 2) Botón para “correr” la simulación con PySAM
-
-
-                        # 3) Salidas de texto donde mostraremos los resultados
-                        
+                        ui.div(
+                            ui.input_action_button("run_sim", "Ejecutar simulación"),
+                            class_="mb-4"
+                            # 2) Botón para “correr” la simulación con PySAM
+                        ),
+                            # Salidas de texto donde mostraremos los resultados
+                        ui.h4("Resultados de la simulación"),
                         ui.output_table("prod_results_table"),
                     ),
+        
                     ui.column(8,
-                        ui.h5("Energía mensual (kWh)"),
+                        ui.h4("Energía generada por mes (kWh)"),
                         output_widget("prod_monthly_plot"),
                     ),
+                ),
+                ui.row(
+                    ui.column(
+                        12,
+                        ui.h4("Energía generada por estación del año",
+                            class_="mt-4 mb-2")   # márgenes opcionales
+                    )
                 ),
                 ui.row(
                     ui.column(3,
@@ -203,10 +213,11 @@ def panel_eolica():
                         ui.output_ui("seasonal_invierno")
                     ),
                 ),
+
                     ui.row(
                         ui.column(
                             12,
-                            ui.h5("Heatmap: Generación horaria anual"),
+                            ui.h4("Energia generada horaria anual"),
                             output_widget("prod_heatmap")
                         ),
                     ),

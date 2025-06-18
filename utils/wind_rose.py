@@ -1123,8 +1123,17 @@ def create_generation_heatmap(gen_array):
             y=y_vals,
             z=z_vals,
             colorscale="jet",
-            colorbar=dict(title="kWh"),
-            hovertemplate="Día: %{x}<br>Hora: %{y}:00<br>Gen: %{z:.2f} kWh<extra></extra>",
+            colorbar=dict(
+                title=dict(
+                    text="Energía (kWh)",
+                    side="right"      # ← lo coloca a la derecha y lo gira en vertical
+                ),
+                thickness=18,         # grosor en px (opcional)
+                len=0.85,             # alto relativo (opcional)
+                yanchor="middle",     # centra el gradiente (opcional)
+                y=0.5                 #   "
+            ),
+            hovertemplate="Día del año: %{x}<br>Hora: %{y}:00<br>Gen: %{z:.2f} kWh<extra></extra>",
         )
     )
 
@@ -1145,7 +1154,7 @@ def create_generation_heatmap(gen_array):
     )
 
     return fig
-
+    #Si en este heatmap quisiera que el itulo del cbar se mostrara del lado derecho y de manra vertical (acostado, 90grados) como deberia de cambiarlo?
 def _build_rose(#ESTA SI
     df: pd.DataFrame,
     dir_col: str,

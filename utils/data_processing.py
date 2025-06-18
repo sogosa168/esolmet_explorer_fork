@@ -4,10 +4,10 @@ import validation_tools as vt
 from utils.config import load_settings
 import glob
 
-variables, latitude, longitude, gmt, name, alias, \
-    _wind_speed_height, _air_temperature_height, _air_pressure_height, \
-    _site_id, _data_tz = load_settings()
-ALLOWED_VARS = variables
+variables, latitude, longitude, gmt, name, alias_map, \
+_site_id, _data_tz, _wind_speed_height, _air_temperature_height, _air_pressure_height \
+    = load_settings()
+ALLOWED_VARS = variables + list(alias_map.values())
 MIN_YEAR = 2010
 SOLAR_CONSTANT = 1361  # W/m², constante solar
 
@@ -67,8 +67,9 @@ def load_csv(filepath: str) -> pd.DataFrame:
     df.set_index("TIMESTAMP", inplace=True)
 
     # 5. renombrar variables usando el diccionario
-    if variables:
-        df.rename(columns=variables, inplace=True)
+    if alias_map:
+        df.rename(columns=alias_map, inplace=True)
+        
 
     # 6. eliminar columnas innecesarias:
     #    - cualquier columna que empiece con 'Unnamed'
@@ -197,7 +198,7 @@ def radiacion(df: pd.DataFrame, rad_columns=None) -> pd.DataFrame:
 
     # 3. determinar columnas de radiación
     rad_cols = ["dni", "ghi", "dhi", "uv"]
-    default_cols = [variables.get(c, c) for c in rad_cols]
+    default_cols = [alias_map.get(c, c) for c in rad_cols] #Aqu muestra el error 
     columnas = rad_columns or default_cols
     columnas = [c for c in columnas if c in df_radiacion.columns]
     if not columnas:

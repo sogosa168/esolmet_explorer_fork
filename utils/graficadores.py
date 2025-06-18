@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import duckdb
 from windrose import WindroseAxes
 from matplotlib.gridspec import GridSpec
+from utils.config import load_settings
 
 
 con = duckdb.connect("esolmet.db")
