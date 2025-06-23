@@ -208,6 +208,12 @@ def server(input, output, session):
         wl = results.get("Perdida por estela (kWh)", None)
         tl = results.get("Perdida por turbina (kWh)", None)
 
+
+        ae_fmt = f"{ae:,.1f}" if ae is not None else "—"
+        wl_fmt = f"{wl:,.1f}" if wl is not None else "—"
+        tl_fmt = f"{tl:,.1f}" if tl is not None else "—"
+        cf_fmt = f"{cf:.2f}"   if cf is not None else "—"
+
         df = pd.DataFrame({
             "Parametro": [
                 "Energía anual (kWh)",
@@ -216,10 +222,10 @@ def server(input, output, session):
                 "Pérdida por turbina (kWh)",
             ],
             "Valor": [
-                ae if ae is not None else float("nan"),
-                cf if cf is not None else float("nan"),
-                wl if wl is not None else float("nan"),
-                tl if tl is not None else float("nan"),
+                ae_fmt,
+                cf_fmt,
+                wl_fmt,
+                tl_fmt,
             ],
         })
         return df

@@ -160,6 +160,7 @@ def panel_eolica():
                                 "Selecciona modelo de turbina:",
 
                                 choices=[
+                                    "SkyStream 2.4kW",
                                     "GE 1.5MWsle",
                                     "Nordex S77 1.5MW",
                                     "Fuhrlander FL 1.5MW",
