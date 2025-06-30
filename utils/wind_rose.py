@@ -414,17 +414,18 @@ def create_typical_wind_heatmap(
             y=list(pivot.index),
             colorscale="Viridis",
             colorbar=dict(
-                title="Velocidad (m/s)",    # texto del título
-                titleside="bottom",  
-                orientation='h',        # lo coloca al lado derecho
-                len=0.6,                    # ocupa el 70% de la altura del subplot
-                thickness=20,               # 15px de grosor
-                x=0.45,                     # lo saca un poco fuera del plotting area
-                xanchor="center",            # lo ancla al lado izquierdo
-                y=-0.1,    
-                yanchor='top',                 # centro verticalmente
-                titlefont=dict(size=14),    # tamaño de la fuente
-                ticklen=3,                  # largo de las marcas
+                title=dict(
+                    text="Velocidad (m/s)",  # texto del título
+                    side="bottom"           # posición debajo
+                ),
+                orientation='h',            # horizontal
+                len=0.6,
+                thickness=20,
+                x=0.45,
+                xanchor="center",
+                y=-0.1,
+                yanchor='top',
+                ticklen=3,
             ),
             hovertemplate="Día: %{x|%b %d}<br>Hora: %{y}:00<br>Vel: %{z:.2f}<extra></extra>"
         ),
@@ -445,19 +446,23 @@ def create_typical_wind_heatmap(
 
     # 2) en el layout:
     fig.update_layout(
-    coloraxis_colorbar_title="Velocidad (m/s)",
-    coloraxis_colorbar_title_side="bottom",
-    coloraxis_colorbar_orientation="h",
-    coloraxis_colorbar_len=0.6,
-    coloraxis_colorbar_thickness=20,
-    coloraxis_colorbar_x=0.45,
-    coloraxis_colorbar_xanchor="center",
-    coloraxis_colorbar_y=-0.1,
-    coloraxis_colorbar_yanchor="top",
-    coloraxis_colorbar_ticklen=3,
-    plot_bgcolor="white",   # fondo de la zona de datos
-    paper_bgcolor="white",  # fondo de todo el lienzo
+        coloraxis=dict(
+            colorbar=dict(
+                title=dict(text="Velocidad (m/s)", side="bottom"),
+                orientation="h",
+                len=0.6,
+                thickness=20,
+                x=0.45,
+                xanchor="center",
+                y=-0.1,
+                yanchor="top",
+                ticklen=3,
+            )
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
     )
+
     # Banda superior horaria (+1σ)
     fig.add_trace(
         go.Scatter(
@@ -697,10 +702,10 @@ def create_seasonal_wind_heatmaps(
         fig.add_trace(
             go.Heatmap(
                 z=pivot.values,
-                x=pivot.columns,
+                x=pivot.columns.astype(str),
                 y=pivot.index,
                 colorscale="Viridis",
-                coloraxis="coloraxis",   
+                coloraxis="coloraxis",  
                 hovertemplate="Día: %{x}<br>Hora: %{y}:00<br>Vel: %{z:.2f} m/s<extra></extra>"
             ),
             row=2, col=1
@@ -738,38 +743,54 @@ def create_seasonal_wind_heatmaps(
                 y=hourly_avg.index,
                 mode="lines",
                 orientation="h",
-                name="Promedio horario",
                 hovertemplate="Hora: %{y}:00<br>Vel: %{x:.2f} m/s<extra></extra>"
             ),
             row=2, col=2
         )
-
         fig.update_layout(
             height=550,
-            margin=dict(t=30,b=40,l=60,r=20),
+            margin=dict(t=30, b=40, l=60, r=20),
             showlegend=False,
-            title_text=f"Heatmap estacional de velocidad — {season}",
+            plot_bgcolor="white",
+            paper_bgcolor="white",
 
-            # Configuramos el coloraxis para la colorbar
+            coloraxis_colorbar_title_text="Velocidad (m/s)",
+            coloraxis_colorbar_title_side="bottom",
+            coloraxis_colorbar_orientation="h",
+            coloraxis_colorbar_len=0.6,
+            coloraxis_colorbar_thickness=20,
+            coloraxis_colorbar_x=0.5,
+            coloraxis_colorbar_xanchor="center",
+            coloraxis_colorbar_y=-0.15,
+            coloraxis_colorbar_yanchor="top",
+            coloraxis_colorbar_ticklen=3,
+        )
+        # 2) layout con coloraxis/colorbar bien anidado:
+        fig.update_layout(
+            height=550,
+            margin=dict(t=30, b=40, l=60, r=20),
+            showlegend=False,
+            title_text=None,
+            plot_bgcolor="white",
+            paper_bgcolor="white",
             coloraxis=dict(
                 colorbar=dict(
-                    title="m/s",
+                    title=dict(text="Velocidad (m/s)", side="bottom"),
                     orientation="h",
-                    y=-0.15,          # ligeramente debajo del subplot
-                    x=0.5,            # centrada
+                    x=0.35,
                     xanchor="center",
+                    y=-0.1,
+                    yanchor="top",
                     len=0.6,
-                    thickness=15,
+                    thickness=20,
                     ticklen=3,
-                    title_side="bottom",
-                    title_font=dict(size=12),
                 )
             )
         )
 
         # 6) Ejes
         fig.update_xaxes(row=2, col=1, title_text="Día típico", tickmode="array",
-                         tickvals=list(pivot.columns)[::5])  # etiqueta cada 5 días
+                         tickvals=list(pivot.columns)[::5])  
         fig.update_yaxes(row=2, col=1, title_text="Hora del día",
                          tickmode="array", tickvals=list(range(0,24,2)))
         fig.update_xaxes(row=1, col=1, showgrid=True, gridcolor="lightgrey")
@@ -1125,13 +1146,13 @@ def create_generation_heatmap(gen_array):
             colorscale="jet",
             colorbar=dict(
                 title=dict(
-                    text="Energía (kWh)",
-                    side="right"      # ← lo coloca a la derecha y lo gira en vertical
+                    text="Energía(kWh)",
+                    side="right"      
                 ),
-                thickness=18,         # grosor en px (opcional)
-                len=0.85,             # alto relativo (opcional)
-                yanchor="middle",     # centra el gradiente (opcional)
-                y=0.5                 #   "
+                thickness=18,         
+                len=0.85,             
+                yanchor="middle",     
+                y=0.5                 
             ),
             hovertemplate="Día del año: %{x}<br>Hora: %{y}:00<br>Gen: %{z:.2f} kWh<extra></extra>",
         )
@@ -1154,7 +1175,6 @@ def create_generation_heatmap(gen_array):
     )
 
     return fig
-    #Si en este heatmap quisiera que el itulo del cbar se mostrara del lado derecho y de manra vertical (acostado, 90grados) como deberia de cambiarlo?
 def _build_rose(#ESTA SI
     df: pd.DataFrame,
     dir_col: str,

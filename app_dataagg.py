@@ -4,7 +4,7 @@ import duckdb
 from shiny import App, Inputs, Outputs, Session, render, ui, req, reactive
 from shinywidgets import render_plotly
 import faicons as fa
-
+from utils.config import load_settings
 from utils.data_processing import load_csv, run_tests, export_data, radiacion
 from utils.plots import graficado_plotly, graficado_radiacion
 from components.panels import panel_subir_archivo, panel_pruebas_archivo, panel_cargar_datos

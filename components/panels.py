@@ -121,30 +121,41 @@ def panel_eolica():
                 ),
                 ui.row(
                     ui.column(
-                    12,
-                    ui.h4("Heatmap anual"),
-                    output_widget("heatmap_wind_annual")
-                    )
+                        12,
+                        ui.h4("Heatmap anual", class_="fs-2 mb-3"),
+                        output_widget(
+                            "heatmap_wind_annual",
+                            width="100%",    
+                            height="600px"
+                        ),    
+                    ),
                 ),
-
                 ui.row(
                     ui.column(6,
                         ui.h4("Primavera", style="text-align:center;"),
-                        output_widget("heatmap_wind_primavera")
+                        output_widget("heatmap_wind_primavera",
+                            width="100%",    
+                            height="400px")
                     ),
                     ui.column(6,
                         ui.h4("Verano", style="text-align:center;"),
-                        output_widget("heatmap_wind_verano")
+                        output_widget("heatmap_wind_verano",
+                            width="100%",    
+                            height="400px")
                     ),
                 ),
                 ui.row(
                     ui.column(6,
                         ui.h4("Otoño", style="text-align:center;"),
-                        output_widget("heatmap_wind_otono")
+                        output_widget("heatmap_wind_otono",
+                            width="100%",    
+                            height="400px")
                     ),
                     ui.column(6,
                         ui.h4("Invierno", style="text-align:center;"),
-                        output_widget("heatmap_wind_invierno")
+                        output_widget("heatmap_wind_invierno",
+                            width="100%",    
+                            height="400px")
                     ),
                 ),
             ),
@@ -158,7 +169,7 @@ def panel_eolica():
                         ui.div(
                             ui.input_select("turbine_model",
                                 "Selecciona modelo de turbina:",
-
+ 
                                 choices=[
                                     "SkyStream 2.4kW",
                                     "GE 1.5MWsle",
@@ -174,26 +185,65 @@ def panel_eolica():
                             ),
                             class_="mb-3"
                         ),
+                        ui.tags.style("""
+                        /* para que el icono sea sólo trazo negro */
+                        svg.feather-circle-info {
+                            fill: none !important;
+                            stroke: black !important;
+                        }
+                        """),
+
                         ui.div(
-                            ui.input_action_button("run_sim", "Ejecutar simulación"),
-                            class_="mb-4"
-                            # 2) Botón para “correr” la simulación con PySAM
+                        ui.input_task_button(
+                            "run_sim",    # mismo input ID que usas en server
+                            "Compute",    # etiqueta del botón
+                            class_="mb-4" 
                         ),
+                        class_="d-flex align-items-center"
+                        ),
+
                             # Salidas de texto donde mostraremos los resultados
-                        ui.h4("Resultados de la simulación"),
+                        ui.div(
+                            ui.h4("Resultados de la simulación", class_="d-inline"),
+                            ui.input_action_button(
+                                "info_results",          
+                                label=None,
+                                icon=fa.icon_svg("circle-info"),
+                                class_="btn-link p-0",
+                                style="background-color:transparent; border:none; box-shadow:none; padding:0;"
+                            ),
+                            class_="mb-2",
+                            ),
                         ui.output_table("prod_results_table"),
                     ),
         
                     ui.column(8,
-                        ui.h4("Energía generada por mes (kWh)"),
-                        output_widget("prod_monthly_plot"),
+                    ui.div(
+                        ui.h4("Energía mensual", class_="d-inline"),
+                        ui.input_action_button(
+                        "info_monthly",   # <-- nuevo ID
+                        label=None,
+                        icon=fa.icon_svg("circle-info"),
+                        class_="btn-link p-0",
+                        style="background-color:transparent; border:none; box-shadow:none; padding:0;"
+                        ),
+                        class_="mb-2"
                     ),
-                ),
+                    output_widget("prod_monthly_plot"),
+                    ),
                 ui.row(
                     ui.column(
                         12,
-                        ui.h4("Energía generada por estación del año",
-                            class_="mt-4 mb-2")   # márgenes opcionales
+                        ui.h4("Energía generada por estación del año",class_="d-inline"),
+                        ui.input_action_button(
+                        "info_seasonal_all",   # <-- nuevo ID
+                        label=None,
+                        icon=fa.icon_svg("circle-info"),
+                        class_="btn-link p-0",
+                        style="background-color:transparent; border:none; box-shadow:none; padding:0;"
+                        ),
+                        class_="mb-2"
+                    ),   # márgenes opcionales
                     )
                 ),
                 ui.row(
@@ -214,14 +264,28 @@ def panel_eolica():
                         ui.output_ui("seasonal_invierno")
                     ),
                 ),
-
-                    ui.row(
-                        ui.column(
-                            12,
-                            ui.h4("Energia generada horaria anual"),
-                            output_widget("prod_heatmap")
+                ui.row(
+                    ui.column(
+                        12,
+                        ui.div(
+                            # título + botón de ayuda
+                            ui.h4("Energía generada horaria anual", class_="d-inline fs-2"),
+                            ui.input_action_button(
+                                "info_heatmap_gen",  # nuevo ID
+                                label=None,
+                                icon=fa.icon_svg("circle-info"),
+                                class_="btn btn-link p-0 ms-2",
+                                style="background:transparent; border:none; box-shadow:none;"
+                            ),
+                            class_="mb-2"
+                        ),
+                        output_widget(
+                        "prod_heatmap",
+                        width="100%",    # aquí forzamos 100% de la columna
+                        height="600px"
                         ),
                     ),
+                ),
             ),
         ),
     )

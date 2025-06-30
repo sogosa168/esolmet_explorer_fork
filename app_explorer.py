@@ -1,5 +1,6 @@
 from shiny import App, ui, render, reactive
 import shinyswatch  
+import asyncio
 from components.explorador import panel_explorador, panel_estadistica
 from components.panels import (
     panel_documentacion,
@@ -43,6 +44,17 @@ print(">>> Columnas en esolmet:", list(esolmet.columns))
 
 
 app_ui = ui.page_fillable(
+    ui.busy_indicators.options(
+        spinner_type="bars3",   
+        spinner_color="black", #Spinner boton carga
+    ),
+    ui.tags.script(
+        {
+            "src": "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
+            "defer": True,
+        }
+    ),
+
     ui.navset_card_tab(
         ui.nav_panel(
             "ESOLMET",
@@ -154,7 +166,7 @@ def server(input, output, session):
     def heatmap_wind_primavera():
         start, end = input.heatmap_speed_range()
         return create_seasonal_wind_heatmaps(esolmet, "ws", start=start, end=end)["Primavera"]
-
+ 
 
     @output
     @render_widget
@@ -229,6 +241,39 @@ def server(input, output, session):
             ],
         })
         return df
+    
+    @reactive.Effect
+    @reactive.event(input.info_results)   #   <-- id del botón "ⓘ"
+    def _show_results_help():
+        ui.modal_show(
+            ui.modal(
+                ui.markdown(
+"""
+**¿Qué significan estos indicadores?**
+
+* **Energía anual (kWh)**  
+  Energía teórica producida en un año completo de operación.
+
+- **Factor de capacidad (%)**  
+  El factor de capacidad indica el porcentaje de la energía real generada comparada con la que produciría si funcionara a potencia nominal todo el año.
+      $$ 
+        \\mathrm{FC} = \\frac{\\text{kWh producidos}}{\\text{Potencia nominal (kW)} \\times 8\,760} \\times 100
+      $$
+
+* **Pérdida por estela**  
+  Reducción de energía por la turbulencia creada entre turbinas.
+
+* **Pérdida por turbina**  
+  Pérdidas internas: mantenimiento, ensuciamiento, paradas, etc.
+"""
+                ),
+                title="Resultados",
+                easy_close=True,
+                footer=None,
+                size="l",
+            )
+        )
+
     @output
     @render_widget
     def prod_monthly_plot():
@@ -249,6 +294,28 @@ def server(input, output, session):
             return ui.tags.pre(str(e))
 
         return fig
+    
+    @reactive.Effect
+    @reactive.event(input.info_monthly)
+    def _show_monthly_help():
+        ui.modal_show(
+            ui.modal(
+                # primero el contenido (posicional):
+                ui.markdown(
+                    """
+                    **Energía mensual (kWh)**  
+                    Esta gráfica muestra, para cada mes del año típico (enero–diciembre), la **energía total** que generaría la turbina, calculada como la suma de la producción horaria de ese mes.
+                    """
+                ),
+                # y después los keywords:
+                title="¿Qué representa esta gráfica?",
+                easy_close=True,
+                footer=None,
+                size="m",
+            )
+        )
+
+
     @output
     @render.ui
     def seasonal_primavera():
@@ -319,6 +386,30 @@ def server(input, output, session):
 
         figures = create_seasonal_generation_figures(gen_array)
         return figures["Invierno"]
+    
+
+    @reactive.Effect
+    @reactive.event(input.info_seasonal_all)
+    def _show_all_season_help():
+        ui.modal_show(
+            ui.modal(
+                ui.markdown(
+                    """
+                    Cada una corresponde a una estación del año:
+                    - **Primavera** (mar–may)  
+                    - **Verano**    (jun–ago)  
+                    - **Otoño**     (sep–nov)  
+                    - **Invierno**  (dic–feb)  
+
+                    Para cada día del “mes típico”, la altura de la barra es la **energía diaria** que produciría la turbina en esa estación.    
+                    """
+                ),
+                title="Energía generada por estación",
+                easy_close=True,
+                footer=None,
+                size="m",
+            )
+        )
 
 
     @output
@@ -337,4 +428,28 @@ def server(input, output, session):
 
         fig = create_generation_heatmap(gen_array)
         return fig
+    
+    @reactive.Effect
+    @reactive.event(input.info_heatmap_gen)
+    def _show_heatmap_help():
+        ui.modal_show(
+            ui.modal(
+                ui.markdown(
+                    """ 
+                    **¿Qué representa este heatmap?**
+                    - **Eje horizontal**: día del año (Ene 1 – Dic 31).  
+                    - **Eje vertical**: hora del día (0 – 23 h).  
+                    - **Color**: energía generada en esa hora y día (kWh).
+
+                    Cada celda es la **producción horaria media típica** para ese instante en un año, mostrando en qué horas y en qué épocas del año la turbina genera más o menos energía.
+                    """
+                ),
+                title="Heatmap de generación anual",
+                easy_close=True,
+                footer=None,
+                size="m",
+            )
+        )
+
+
 app = App(app_ui, server)
